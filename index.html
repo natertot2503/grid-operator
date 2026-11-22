@@ -57,7 +57,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 .kv b{color:var(--ink);font-size:16px}
 .trend{position:relative;height:110px}
 .trend canvas{position:absolute;inset:0;width:100%;height:100%}
-.leg{display:flex;gap:14px;font-size:13px;color:var(--dim);margin-top:4px}
+.leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--dim);margin-top:4px}
+.outlook{margin-top:6px;font-size:14px;line-height:1.35}
+.outlook b{font-weight:700}
 .leg i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}
 .alarm{display:flex;gap:8px;align-items:center;font-size:14px;min-height:44px}
 .alarm .tag{flex:none;font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;background:var(--ln);color:var(--ink)}
@@ -119,7 +121,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 
   <div class="pn">
     <div class="trend" id="trend"><canvas id="cv"></canvas></div>
-    <div class="leg"><span><i style="background:var(--ink)"></i>Demand</span><span><i style="background:var(--blue)"></i>Generation</span><span>last ~2 hours</span></div>
+    <div class="leg"><span><i style="background:var(--ink)"></i>Demand</span><span><i style="background:var(--blue)"></i>Your plants (not solar/wind)</span><span>Dashed = next 3 h</span></div>
+    <div class="outlook" id="outlook"></div>
   </div>
 
   <div class="pn alarm" id="alarm"><span class="tag">INFO</span><span id="amsg">System normal</span></div>
@@ -135,13 +138,13 @@ const $=id=>document.getElementById(id);
 const HPS=0.1;               // game hours per real second (a day ≈ 4 minutes)
 const D=500,M=600;           // load damping MW/Hz, system inertia
 const TYPES={
-  nuc:{name:'Nuclear',min:300,max:600,ramp:3,cost:10,note:'Cheap, slow ramp. Can’t go below 300.'},
-  coal:{name:'Coal',min:150,max:400,ramp:8,cost:30,start:25,startCost:5000,note:'Start takes ~25 s. Min 150.'},
+  nuc:{name:'Nuclear',min:300,max:600,ramp:6,cost:10,note:'Cheapest power, slowest ramp. Can’t go below 300.'},
+  coal:{name:'Coal',min:150,max:400,ramp:20,cost:30,start:25,startCost:5000,note:'Start takes ~25 s. Min 150.'},
   gas:{name:'Gas peaker',min:50,max:300,ramp:30,cost:85,start:6,startCost:1000,note:'Fast but pricey. Start ~6 s.'},
   hydro:{name:'Hydro',min:0,max:250,ramp:80,cost:0,note:'Free and fast, limited water.'},
   gasb:{name:'Gas peaker',min:30,max:200,ramp:30,cost:85,start:6,startCost:800,note:'Fast but pricey. Start ~6 s.'},
-  coalb:{name:'Coal',min:100,max:300,ramp:7,cost:30,start:25,startCost:4000,note:'Start takes ~25 s. Min 100.'},
-  smr:{name:'Small reactor',min:100,max:300,ramp:4,cost:12,start:40,startCost:3000,note:'Cheap baseload, slow ramp. Start ~40 s. Min 100.'}
+  coalb:{name:'Coal',min:100,max:300,ramp:18,cost:30,start:25,startCost:4000,note:'Start takes ~25 s. Min 100.'},
+  smr:{name:'Small reactor',min:100,max:300,ramp:8,cost:12,start:40,startCost:3000,note:'Cheap baseload, slow ramp. Start ~40 s. Min 100.'}
 };
 const RES=1300;
 const FAM={gas:'gas',gasb:'gas',coal:'coal',coalb:'coal',nuc:'nuc',smr:'nuc',hydro:'hydro',res:'hydro',solar:'solar',wind:'wind',bat:'bat'};
@@ -247,6 +250,7 @@ function demand(t){
   if(st.ice)sh*=1.08;
   return base*sh*(1+st.noise)+(st.met?st.met.mw*st.met.ramp:0);
 }
+const solarAt=t=>st.curtS?0:st.solarCap*sun(t)*st.cloud*(st.smoke?.5:1);
 const sun=t=>{const a=st.sr||6,b=st.ss||19;return t>a&&t<b?Math.sin(Math.PI*(t-a)/(b-a)):0};
 function planSun(){st.sr=5.5+Math.random()*1.5;st.ss=18+Math.random()*2}
 const fmt=t=>{const h=Math.floor(t)%24,m=Math.floor((t%1)*60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')};
@@ -273,7 +277,7 @@ function step(dt){
       }
     }
   }
-  st.noise+=(Math.random()-.5)*.006*dt;st.noise*=1-.02*dt;st.noise=Math.max(-.03,Math.min(.03,st.noise));
+  st.noise+=(Math.random()-.5)*.003*dt;st.noise*=1-.03*dt;st.noise=Math.max(-.015,Math.min(.015,st.noise));
   st.cloud+=(st.cloudT-st.cloud)*Math.min(1,.35*dt);
   if(st.met){const m=st.met;m.left-=dh;m.ramp=m.left>1?Math.min(1,m.ramp+dt/3):Math.max(0,m.left);if(m.left<=0){st.met=null;alarm('','Neighbor grid restored: their load is off your system');log('Neighbor grid restored')}}
   if(Math.random()<dt/35){const night=t<6||t>20?.15:0,nt=Math.min(.95,.05+Math.random()*.8+night);
@@ -284,13 +288,15 @@ function step(dt){
   const wT=st.curtW||st.ice?0:st.windCap*st.wind;st.windOut+=Math.max(-25*dt,Math.min(25*dt,wT-st.windOut));const wind=st.windOut;
   // units
   let gen=solar+wind,cost=0;
+  const agcCap=Object.values(st.u).reduce((a,u)=>a+(u.agc&&u.s==='on'?umax(u):0),0)||1;
   for(const k in st.u){
     const u=st.u[k],c=TYPES[u.type];
     if(u.s==='build'||u.s==='dmg'){u.p=0;continue}
     if(u.s==='rep'){u.p=0;u.tmr-=dt;if(u.tmr<=0){u.s=c.start?'off':'on';u.p=0;alarm('',(u.name||c.name)+' repaired'+(c.start?': ready to start':''))}continue}
     if(u.s==='start'){u.tmr-=dt;if(u.tmr<=0){u.s='on';alarm('','Unit '+(u.name||c.name)+' synchronized')}}
     if(u.s==='trip'){u.tmr-=dt;if(u.tmr<=0)u.s='off'}
-    if(k==='hydro'&&u.agc)u.sp=Math.max(0,Math.min(umax(u),u.sp-(st.f-60)*400*dt));
+    if(u.agc&&u.s==='on'){const sh=umax(u)/agcCap;u.sp=u.sp-(st.f-60)*500*sh*dt;
+      u.sp=Math.max(c.min,Math.min(umax(u),Math.max(u.p-c.ramp*1.5,Math.min(u.p+c.ramp*1.5,u.sp))))}
     let tgt=u.s==='on'?Math.max(c.min,Math.min(umax(u),u.sp)):0;
     if(k==='hydro'&&st.res<=0)tgt=0;
     const r=c.ramp*dt;u.p+=Math.max(-r,Math.min(r,tgt-u.p));
@@ -325,7 +331,7 @@ function step(dt){
   const unserved=st.shed*dh,profit=served*dh*60-cost-unserved*1000;
   st.money+=profit;st.dayStats.profit+=profit;st.dayStats.uns+=unserved;
   st.dayStats.fmin=Math.min(st.dayStats.fmin,st.f);st.dayStats.fmax=Math.max(st.dayStats.fmax,st.f);
-  histT+=dt;if(histT>=.5){histT=0;st.hist.push([served,gen]);if(st.hist.length>140)st.hist.shift()}
+  histT+=dt;if(histT>=.5){histT=0;st.hist.push([served,gen-solar-wind]);if(st.hist.length>140)st.hist.shift()}
   st.t+=dh;
   if(st.t>=24){st.t-=24;endDay()}
 }
@@ -440,7 +446,7 @@ function begin(){hideOv();st.paused=false;st.phase='run';buildUnits();alarm('','
 function buildUnits(){
   const card=(k)=>{const u=st.u[k],c=TYPES[u.type];
     const startBtn=`<button class="btn sm" data-start="${k}"></button>`;
-    const agc=k==='hydro'?`<label class="tog"><input type="checkbox" id="agc"> AGC auto</label>`:'';
+    const agc=`<label class="tog"><input type="checkbox" data-agc="${k}" ${u.agc?'checked':''}> AGC</label>`;
     const res=k==='hydro'?`<div class="bar"><i id="resb"></i></div><div class="note">Reservoir <span class="num" id="rest"></span></div>`:`<div class="note">${c.note}</div>`;
     return `<div class="pn u"><div class="h"><span class="nm">${u.name||c.name}</span><span class="chip" id="ch-${k}"></span></div>
       <div class="mw num" id="mw-${k}"></div><div class="sp num" id="sp-${k}"></div>
@@ -472,7 +478,7 @@ function buildUnits(){
   });
   $('curts').checked=!!st.curtS;$('curts').onchange=e=>st.curtS=e.target.checked;
   if($('curtw')){$('curtw').checked=!!st.curtW;$('curtw').onchange=e=>st.curtW=e.target.checked}
-  if($('agc')){$('agc').checked=st.u.hydro.agc;$('agc').onchange=e=>st.u.hydro.agc=e.target.checked}
+  document.querySelectorAll('[data-agc]').forEach(el=>el.onchange=()=>{const u=st.u[el.dataset.agc];if(u)u.agc=el.checked});
   document.querySelectorAll('[data-bauto]').forEach(el=>el.onchange=()=>st.bats[+el.dataset.bauto].auto=el.checked);
   document.querySelectorAll('[data-bsp]').forEach(el=>el.oninput=()=>st.bats[+el.dataset.bsp].sp=+el.value);
   $('restore').onclick=()=>{if(st.shed>0){st.shed=Math.max(0,st.shed-150);alarm('','Restored 150 MW of customers')}};
@@ -497,7 +503,7 @@ function render(){
     if(sb){const show=c.start||u.s==='dmg'||u.s==='rep';sb.style.display=show?'':'none';
       sb.textContent=u.s==='dmg'?'Repair ('+money(u.rc)+')':u.s==='rep'?'Repairing':u.s==='off'?'Start (−$'+c.startCost/1000+'k)':u.s==='trip'?'Locked out':u.s==='build'?'Building':'Stop';
       sb.disabled=u.s==='trip'||u.s==='build'||u.s==='rep'||(u.s==='dmg'&&st.money<u.rc);sb.classList.toggle('pri',u.s==='dmg')}
-    const sl=document.querySelector(`[data-sp="${k}"]`);if(k==='hydro'&&u.agc)sl.value=u.sp;sl.disabled=(k==='hydro'&&u.agc)||u.s==='build';
+    const sl=document.querySelector(`[data-sp="${k}"]`);if(u.agc)sl.value=u.sp;sl.disabled=!!u.agc||u.s==='build';
   }
   if($('resb')){$('resb').style.width=Math.min(100,st.res/st.resCap*100)+'%';$('rest').textContent=Math.round(st.res)+' / '+st.resCap+' MWh'}
   $('mw-sol').innerHTML=Math.round(st.solar||0)+'<small> MW</small>';
@@ -513,7 +519,7 @@ function render(){
     $('socb'+i).style.width=(b.soc/b.cap*100)+'%';$('soct'+i).textContent=Math.round(b.soc)+' / '+b.cap+' MWh';
     $('ch-bat'+i).textContent=b.p>5?'DISCHG':b.p<-5?'CHARGE':'IDLE'});
   {const pc=tC?tS/tC:0,el=$('bsoc');el.textContent=tC?Math.round(pc*100)+'%':'—';el.className='num'+((pc>.85&&tP<-5)||(pc<.15&&tP>5)?' w':'')}
-  drawGauge();drawTrend();drawAlarm();
+  drawGauge();drawTrend();drawAlarm();outlook();
   $('pause').textContent=st.paused?'Run':'Pause';$('spd').textContent=(st.speed===.5?'½':st.speed)+'×';$('spd').classList.toggle('slow',!!st.autoSlow);
 }
 function drawAlarm(){const a=st.alarm,el=$('alarm');const cls='pn alarm'+(a.lvl?' '+a.lvl:'');
@@ -522,8 +528,7 @@ const ang=f=>Math.PI*(1-(Math.max(59,Math.min(61,f))-59)/2);
 const pt=(a,r)=>[100+r*Math.cos(a),100-r*Math.sin(a)];
 function arc(f1,f2,col,w){const a=pt(ang(f1),80),b=pt(ang(f2),80);return `<path d="M${a[0].toFixed(1)} ${a[1].toFixed(1)}A80 80 0 0 1 ${b[0].toFixed(1)} ${b[1].toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w}"/>`}
 function drawGauge(){
-  const css=getComputedStyle(document.documentElement);
-  const ln=css.getPropertyValue('--ln'),ink=css.getPropertyValue('--ink'),dim=css.getPropertyValue('--dim');
+  const ln=col('--ln'),ink=col('--ink'),dim=col('--dim');
   let s=arc(59,61,ln,14)+arc(59,59.3,'#d42f1f',14)+arc(60.7,61,'#d42f1f',14)+arc(59.3,59.8,'#e2ad00',14)+arc(60.2,60.7,'#e2ad00',14);
   for(const v of [59,59.5,60,60.5,61]){const a=pt(ang(v),96),b=pt(ang(v),88);s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${dim}" stroke-width="1.5"/>`}
   const n=pt(ang(st.f),70);s+=`<line x1="100" y1="100" x2="${n[0].toFixed(1)}" y2="${n[1].toFixed(1)}" stroke="${ink}" stroke-width="4" stroke-linecap="round"/><circle cx="100" cy="100" r="7" fill="${ink}"/>`;
@@ -531,18 +536,36 @@ function drawGauge(){
   $('gsv').innerHTML=s;
 }
 const cv=$('cv');
+const probe=document.createElement('span');probe.style.display='none';document.body.appendChild(probe);
+function col(v){probe.style.color=`var(${v})`;return getComputedStyle(probe).color}
 function drawTrend(){
   const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;
   if(cv.width!==W*dpr){cv.width=W*dpr;cv.height=H*dpr}
   const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,W,H);
   const h=st.hist;if(h.length<2)return;
   const css=getComputedStyle(document.documentElement);
+  const fc=[];for(let j=0;j<=60;j++){const tt=st.t+j*.05;fc.push([demand(tt%24),demand(tt%24)-solarAt(tt%24)-(st.windP||0)])}
   let lo=Infinity,hi=-Infinity;for(const [a,b] of h){lo=Math.min(lo,a,b);hi=Math.max(hi,a,b)}
-  lo-=40;hi+=40;const X=i=>i/(139)*W,Y=v=>H-6-(v-lo)/(hi-lo)*(H-12);
-  x.strokeStyle=css.getPropertyValue('--ln');x.lineWidth=1;x.fillStyle=css.getPropertyValue('--dim');x.font='11px sans-serif';
+  for(const [a,b] of fc){lo=Math.min(lo,a,b);hi=Math.max(hi,a,b)}
+  lo-=40;hi+=40;const off=140-h.length,X=i=>(i+off)/200*W,Y=v=>H-6-(v-lo)/(hi-lo)*(H-12),XF=j=>(140+j)/200*W;
+  x.strokeStyle=col('--ln');x.lineWidth=1;x.fillStyle=col('--dim');x.font='11px sans-serif';
   for(const v of [lo+40,hi-40]){x.beginPath();x.moveTo(0,Y(v));x.lineTo(W,Y(v));x.stroke();x.fillText(Math.round(v)+' MW',4,Y(v)-3)}
-  for(const [j,col] of [[0,'--ink'],[1,'--blue']]){x.strokeStyle=css.getPropertyValue(col);x.lineWidth=2;x.beginPath();
+  for(const [j,c] of [[0,'--ink'],[1,'--blue']]){x.strokeStyle=col(c);x.lineWidth=2;x.beginPath();
     h.forEach((p,i)=>i?x.lineTo(X(i),Y(p[j])):x.moveTo(X(i),Y(p[j])));x.stroke()}
+  x.strokeStyle=col('--ln');x.lineWidth=1;x.beginPath();x.moveTo(XF(0),0);x.lineTo(XF(0),H);x.stroke();
+  x.fillStyle=col('--dim');x.fillText('now',XF(0)+3,11);
+  x.setLineDash([5,4]);
+  for(const [j,c] of [[0,'--ink'],[1,'--blue']]){x.strokeStyle=col(c);x.lineWidth=2;x.beginPath();
+    fc.forEach((p,i)=>i?x.lineTo(XF(i),Y(p[j])):x.moveTo(XF(i),Y(p[j])));x.stroke()}
+  x.setLineDash([]);
+}
+function outlook(){
+  const t=st.t,dD=demand((t+1)%24)-demand(t),dS=solarAt((t+1)%24)-solarAt(t),need=dD-dS;
+  const sg=v=>(v>=0?'+':'−')+Math.abs(Math.round(v))+' MW';
+  let txt=`Next hour: demand <b>${sg(dD)}</b>, solar <b>${sg(dS)}</b> → your plants need <b>${sg(need)}</b>`;
+  const dis=st.bats.reduce((a,b)=>a+Math.max(0,b.p),0),soc=st.bats.reduce((a,b)=>a+b.soc,0);
+  if(dis>20){const hrs=soc/dis;txt+=`<br>Battery covering ${Math.round(dis)} MW: empty in ~${hrs<1?Math.round(hrs*60)+' min':hrs.toFixed(1)+' h'} (game time)`}
+  $('outlook').innerHTML=txt;
 }
 function showOv(html){$('ovc').innerHTML=html;$('ov').classList.add('on')}
 function hideOv(){$('ov').classList.remove('on')}
@@ -553,7 +576,7 @@ function intro(resume){
   <p>You run a small power grid. Match generation to customer demand and keep frequency at <b>60 Hz</b>.</p>
   <ul><li>Too little generation: frequency sags. Below 59.3 Hz relays shed customers. Below 59 Hz: blackout.</li>
   <li>Too much: frequency climbs. Above 61 Hz: blackout.</li>
-  <li>Move the setpoint sliders. Units ramp at their own rate, so plan ahead for the morning and evening peaks.</li>
+  <li>Move the setpoint sliders, or tick <b>AGC</b> on a unit to let it follow demand automatically. The dashed lines and the “Next hour” line show what’s coming, including solar fading at sunset.</li>
   <li>Watch for clouds, unit trips and heat waves. Each day demand grows. From day 5, natural disasters can damage or destroy plants.</li>
   <li>Speed button cycles ½×, 1×, 2×, 3×. If the power balance passes ±100 MW the game drops to ½× on its own, and returns to 1× once you’re back within ±30 MW for a few seconds.</li>
   <li>Earn $60 per MWh delivered, minus fuel. Spend it on new plants with <b>Build</b>. They come online the next morning.</li>
