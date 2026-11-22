@@ -581,7 +581,7 @@ function intro(resume){
   <li>Speed button cycles ½×, 1×, 2×, 3×. If the power balance passes ±100 MW the game drops to ½× on its own, and returns to 1× once you’re back within ±30 MW for a few seconds.</li>
   <li>Earn $60 per MWh delivered, minus fuel. Spend it on new plants with <b>Build</b>. They come online the next morning.</li>
   <li>Survive as many days as you can.</li></ul>
-  <p class="note">Best run: ${st.best} day${st.best===1?'':'s'}. Pauses itself if you switch apps.</p>
+  <p class="note">Best run: ${st.best} day${st.best===1?'':'s'}. Pauses itself if you switch apps. Version 3 (forecast + AGC).</p>
   <label class="tog"><input type="checkbox" id="aslow" ${st.autoSlowOn!==false?'checked':''}> Auto slow-motion: drop to ½× speed when the power balance passes ±100 MW</label>
   <button class="btn pri" id="go">${resume?'Resume':'Start shift'}</button>`);
   $('aslow').onchange=e=>st.autoSlowOn=e.target.checked;
