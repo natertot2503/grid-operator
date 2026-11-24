@@ -70,6 +70,16 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 .alarm.a .tag{background:var(--alm);color:#fff}.alarm.w .tag{background:var(--warn);color:#1d1600}
 .alarm.a{animation:fl 1s steps(2) 3}
 @keyframes fl{50%{background:color-mix(in srgb,var(--alm) 18%,var(--pn))}}
+.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;position:sticky;top:var(--barh,96px);z-index:3;background:var(--bg);padding:4px 0}
+.tab{font:inherit;min-height:48px;border-radius:9px;border:1px solid var(--ln);background:var(--pn);color:var(--ink);display:grid;line-height:1.15;padding:4px;cursor:pointer}
+.tab b{font-size:14px}.tab span{font-size:12px;color:var(--dim)}
+.tab.on{background:var(--blue);border-color:var(--blue);color:#fff}.tab.on span{color:#ffffffcc}
+.tab:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+#units[data-tab=base] [data-t]:not([data-t=base]),#units[data-tab=swing] [data-t]:not([data-t=swing]),#units[data-tab=green] [data-t]:not([data-t=green]){display:none}
+.tiegrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;text-align:center}
+.tiegrid div{background:var(--bg);border-radius:6px;padding:5px 2px;display:grid;line-height:1.15}
+.tiegrid span{font-size:12px;color:var(--dim)}.tiegrid b{font-size:17px;font-weight:800;white-space:nowrap}
+.pinned{grid-column:1/-1;font-size:12px;color:var(--dim);border-top:1px solid var(--ln);padding-top:6px;margin-top:2px}
 .units{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .u{display:grid;gap:4px;align-content:start}
 .u .h{display:flex;justify-content:space-between;align-items:center;gap:4px}
@@ -94,6 +104,13 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 .card h2{margin:0;font-size:28px;line-height:1.05}
 .card p,.card li{margin:0;font-size:15px}
 .card ul{margin:0;padding-left:18px;display:grid;gap:5px}
+.learn{padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--blue) 12%,transparent);border-left:4px solid var(--blue)}
+.learn p{margin:4px 0 0;font-size:14px}
+.how summary{font-size:13px;color:var(--blue);cursor:pointer;min-height:28px;display:flex;align-items:center}
+.how p{margin:2px 0 4px;font-size:14px}
+.sh{margin:10px 0 0;font-size:18px}
+.exph{padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--blue) 14%,transparent);border:1px solid var(--blue)}
+.exph h3{margin:0 0 4px;font-size:22px}.exph p,.exph li{font-size:14px}
 .card .fc{font-weight:700;color:var(--blue)}
 .warnp{margin:0;padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--warn) 28%,transparent);border-left:4px solid var(--warn);font-size:14px}
 @media(prefers-reduced-motion:reduce){.alarm.a{animation:none}}
@@ -125,7 +142,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 
   <div class="pn">
     <div class="trend" id="trend"><canvas id="cv"></canvas></div>
-    <div class="leg"><span><i style="background:var(--ink)"></i>Demand</span><span><i style="background:var(--blue)"></i>Your plants (not solar/wind)</span><span>Dashed = next 3 h</span></div>
+    <div class="leg"><span><i style="background:var(--ink)"></i>Demand<span id="lgex"></span></span><span><i style="background:var(--blue)"></i>Your plants (not solar/wind)</span><span>Dashed = next 3 h</span></div>
     <div class="outlook"><div class="olk">
       <div><span>Demand, next hr</span><b id="o-d">+0</b></div>
       <div><span>Solar, next hr</span><b id="o-s">+0</b></div>
@@ -135,7 +152,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 
   <div class="pn alarm" id="alarm"><span class="tag">INFO</span><span id="amsg">System normal</span></div>
 
-  <div class="units" id="units"></div>
+  <div class="tabs" role="tablist" id="tabs">
+    <button class="tab" data-tab="base" role="tab"><b>Base load</b><span class="num" id="tw-base">0 MW</span></button>
+    <button class="tab" data-tab="swing" role="tab"><b>Swing</b><span class="num" id="tw-swing">0 MW</span></button>
+    <button class="tab" data-tab="green" role="tab"><b>Green</b><span class="num" id="tw-green">0 MW</span></button>
+  </div>
+  <div class="units" id="units" data-tab="base"></div>
 </div>
 
 <div class="ov on" id="ov"><div class="card" id="ovc"></div></div>
@@ -152,12 +174,54 @@ const TYPES={
   hydro:{name:'Hydro',min:0,max:250,ramp:80,cost:0,note:'Free and fast, limited water.'},
   gasb:{name:'Gas peaker',min:30,max:200,ramp:30,cost:85,start:6,startCost:800,note:'Fast but pricey. Start ~6 s.'},
   coalb:{name:'Coal',min:100,max:300,ramp:18,cost:30,start:25,startCost:4000,note:'Start takes ~25 s. Min 100.'},
+  cc:{name:'Combined cycle',min:150,max:450,ramp:12,cost:45,start:45,startCost:8000,note:'Gas turbine + HRSG + steam turbine.'},
   smr:{name:'Small reactor',min:100,max:300,ramp:8,cost:12,start:40,startCost:3000,note:'Cheap baseload, slow ramp. Start ~40 s. Min 100.'}
 };
 const RES=1300;
-const FAM={gas:'gas',gasb:'gas',coal:'coal',coalb:'coal',nuc:'nuc',smr:'nuc',hydro:'hydro',res:'hydro',solar:'solar',wind:'wind',bat:'bat'};
-const FAMN={gas:'gas units',coal:'coal units',nuc:'nuclear units',hydro:'hydro',solar:'solar',wind:'wind',bat:'battery'};
-const umax=u=>TYPES[u.type].max+((st.ub||{})[FAM[u.type]]||0)-(u.der||0);
+const FAM={cc:'cc',gas:'gas',gasb:'gas',coal:'coal',coalb:'coal',nuc:'nuc',smr:'nuc',hydro:'hydro',res:'hydro',solar:'solar',wind:'wind',bat:'bat'};
+const FAMN={cc:'combined-cycle units',gas:'gas units',coal:'coal units',nuc:'nuclear units',hydro:'hydro',solar:'solar',wind:'wind',bat:'battery'};
+// per-plant engineering upgrades; installed overnight. fx: max/min MW, ramp/cost/start/startCost/water as fractions
+const UPG={
+  nuc:[{id:'fwp',learn:'A reactor’s heat output is limited partly by how much feedwater can be pushed through the steam generators. Bigger feedwater pumps raise that flow, so the plant can run at a higher licensed power level (a “power uprate”) and send more steam to the turbine.',name:'Upsized feedwater pumps',desc:'Thermal power uprate: more steam to the turbine',fx:{max:60},cost:1.6e6},
+       {id:'lpt',learn:'Steam does much of its work expanding through the low-pressure turbine stages. Newer blades with better aerodynamics and tighter seals pull more energy out of the same steam, so you get more MW per unit of fuel.',name:'Low-pressure turbine retrofit',desc:'More electricity from the same steam',fx:{cost:-.2,max:20},cost:1.2e6},
+       {id:'lf',learn:'Reactor power is steered with control rods and boron dissolved in the coolant. Better rod-control logic and in-core instruments let the core change power faster without uneven heating that would stress the fuel.',name:'Load-follow control upgrade',desc:'Faster, finer control-rod moves',fx:{ramp:.6},cost:.8e6},
+       {id:'rods',learn:'“Gray” rods absorb only part of the neutrons that hit them. They allow gentler power cuts than full-strength rods or big boron changes, so the reactor can turn down further at night. French reactors use them for load following.',name:'Gray control rods',desc:'Lets the reactor run lower overnight',fx:{min:-100},cost:.9e6}],
+  coal:[{id:'econ',learn:'An economizer is a heat exchanger in the boiler’s back pass. Flue gas that would have gone up the stack preheats the incoming feedwater, so the furnace burns less coal to make the same steam.',name:'Economizer',desc:'Preheats boiler feedwater with flue-gas heat',fx:{cost:-.15},cost:.6e6},
+        {id:'bfp',learn:'Boiler feed pumps have to push water into a boiler that is already at full steam pressure. If they’re maxed out, more coal won’t make more steam. Larger pumps raise that ceiling.',name:'Larger boiler feed pumps',desc:'More steam flow at full load',fx:{max:50},cost:.9e6},
+        {id:'mill',learn:'Coal is ground to powder in pulverizer mills before being blown into the burners, and the mills often limit how fast load can change. A spare mill means fuel flow can climb faster.',name:'Extra pulverizer mill',desc:'Fuel delivery keeps up with faster load changes',fx:{ramp:.5},cost:.7e6},
+        {id:'ign',learn:'A cold coal burner can’t light on its own; it needs a stable flame first. Natural-gas igniters light the furnace and hold flame quickly, so the unit syncs sooner and wastes less fuel warming up.',name:'Natural-gas igniters',desc:'Warm starts without waiting on the coal flame',fx:{start:-.6},cost:.4e6},
+        {id:'burn',learn:'At low load, coal flames get unstable and can blow out, which trips the unit. Low-load burners stage combustion air to keep the flame anchored, so the unit can idle lower instead of shutting down overnight.',name:'Low-load burner retrofit',desc:'Stable flame at lower output',fx:{min:-60},cost:.5e6},
+        {id:'bunk',learn:'Bunkers are the silos that hold crushed coal above the mills. More storage means buying in bigger lots and handling fuel less often, a small but steady saving on every MWh.',name:'Larger coal bunkers',desc:'Bigger on-site stockpile, bought in bulk',fx:{cost:-.1},cost:.5e6}],
+  gas:[{id:'fog',learn:'A gas turbine’s output depends on how much air mass it moves. A fine mist sprayed into the inlet cools the air as it evaporates, and cooler air is denser, so the same machine makes more power, especially on hot days.',name:'Inlet air fogging',desc:'Cooler, denser intake air',fx:{max:40},cost:.5e6},
+       {id:'recup',learn:'A recuperator uses hot turbine exhaust to preheat the compressed air before it reaches the combustor. Less fuel is needed to hit firing temperature, which improves the heat rate.',name:'Recuperator',desc:'Reuses exhaust heat to preheat combustion air',fx:{cost:-.2},cost:.8e6},
+       {id:'fuel',learn:'A turbine can only ramp as fast as fuel arrives at pressure. A bigger supply line and a booster compressor hold gas pressure up during fast load increases, so the fuel valve can open harder.',name:'Larger fuel line & gas compressor',desc:'Fuel supply keeps up with fast ramps',fx:{ramp:.5,max:20},cost:.6e6},
+       {id:'fast',learn:'A start means purging unburned gas, igniting, spinning up and synchronizing. Better sequencing and starting equipment shorten the purge and acceleration, cutting time, fuel and wear on every start.',name:'Fast-start package',desc:'Shorter purge and ignition sequence',fx:{start:-.5,startCost:-.5},cost:.3e6}],
+  cc:[{id:'duct',learn:"Duct burners are extra burners inside the HRSG that fire natural gas into the turbine exhaust, which still has plenty of oxygen. That makes more steam for the steam turbine on hot days or peaks, but the added fuel is used less efficiently than in the gas turbine itself.",name:'HRSG duct burners',desc:'Supplementary firing in the heat-recovery boiler',fx:{max:70,cost:.05},cost:.8e6},
+       {id:'ob',learn:"A conventional HRSG has thick-walled steam drums that must warm slowly to avoid thermal stress. A once-through (drumless) design boils water inside the tubes themselves, so it tolerates fast temperature changes: quicker starts and faster ramps.",name:'Once-through HRSG',desc:'Drumless boiler design that handles fast temperature swings',fx:{start:-.5,ramp:.4},cost:1.1e6},
+       {id:'stx',learn:"The steam turbine turns the HRSG’s steam into the plant’s ‘free’ extra third of output. Retrofitting it with modern blading and better seals extracts more power from the same steam, lifting the whole plant’s efficiency.",name:'Steam turbine retrofit',desc:'Modern blading and seals on the bottoming cycle',fx:{max:25,cost:-.1},cost:1.0e6},
+       {id:'chill',learn:"Like fogging on a peaker, inlet chillers cool the gas turbine’s intake air, here with a refrigeration plant so it works even on humid days. Denser air means more mass flow through the gas turbine, and more exhaust heat for the HRSG too.",name:'Inlet air chillers',desc:'Mechanical chilling of turbine intake air',fx:{max:40},cost:.7e6},
+       {id:'cond',learn:"The steam turbine exhausts into a condenser. The colder the condenser, the lower the back-pressure and the more energy the turbine can extract. A bigger cooling tower or condenser cleaning system improves vacuum and squeezes out a bit more power per unit of fuel.",name:'Condenser & cooling-tower upgrade',desc:'Better vacuum on the steam turbine exhaust',fx:{max:15,cost:-.04},cost:.5e6}],
+  hydro:[{id:'runner',learn:'The runner is the wheel the water pushes against. Modern runners shaped with computer flow modeling turn more of the water’s energy into rotation, so each acre-foot of water makes more MWh.',name:'Turbine runner replacement',desc:'More MWh from every drop of water',fx:{water:-.2},cost:.7e6},
+         {id:'pen',learn:'The penstock is the big pipe from the reservoir to the turbine. Friction in it wastes head (pressure). A larger penstock loses less and passes more flow, which raises the maximum output.',name:'Upsized penstock',desc:'More water flow to the turbines',fx:{max:60},cost:1.0e6},
+         {id:'gov',learn:'The governor opens and closes the wicket gates that meter water into the turbine. A digital governor reacts faster and more precisely than old mechanical-hydraulic ones, so the unit chases load changes more quickly.',name:'Digital governor',desc:'Quicker wicket-gate response',fx:{ramp:.5},cost:.4e6}],
+  solar:[{id:'track',learn:'Fixed panels face the sun squarely only around midday. Single-axis trackers tilt each row east to west through the day, so the panels catch strong light in the morning and evening too.',name:'Single-axis trackers',desc:'Panels follow the sun: much more output early and late in the day',fx:{track:1},cost:1.1e6},
+         {id:'clean',learn:'Dust, pollen and bird droppings block light and can cut output by several percent, more in dry country. Robots that brush the panels every few days keep the farm close to its rated output.',name:'Robotic panel cleaning',desc:'Keeps dust and pollen off the panels',fx:{gain:.08},cost:.4e6},
+         {id:'inv',learn:'Panels make DC; inverters turn it into grid AC, and every conversion loses some energy as heat. Newer inverters waste less and track each string’s best operating point more closely.',name:'Inverter upgrade',desc:'Less DC-to-AC conversion loss',fx:{gain:.05},cost:.3e6}],
+  wind:[{id:'blades',learn:'A turbine’s power grows with the area its blades sweep. Longer blades sweep more air, so the turbine makes useful power at lower wind speeds. The gain is biggest in light winds.',name:'Longer blades',desc:'More output in light wind',fx:{gain:.2},cost:.9e6},
+        {id:'deice',learn:'Ice changes a blade’s shape and weight, so turbines normally shut down to avoid damage and imbalance. Heaters inside the blades melt the ice so they can keep turning.',name:'Blade de-icing heaters',desc:'Keeps turbines turning through ice storms',fx:{deice:1},cost:.6e6},
+        {id:'yaw',learn:'The nacelle turns (“yaws”) to face the wind. Smarter yaw control with better wind sensors keeps the rotor pointed into the wind and recovers energy lost to misalignment.',name:'Smart yaw control',desc:'Turbines track wind direction more closely',fx:{gain:.07},cost:.4e6}]
+};
+const upScale=u=>u.type==='smr'||u.type==='gasb'||u.type==='coalb'?{mw:.6,cost:.7}:{mw:1,cost:1};
+function ufx(u,key){const L=UPG[FAM[u.type]]||[],sc=(key==='max'||key==='min')?upScale(u).mw:1;let v=0;
+  for(const x of L)if(u.up&&u.up[x.id]===1&&x.fx[key])v+=x.fx[key]*sc;return v}
+function gfx(g,key){let v=0;for(const x of UPG[g])if(st.gup&&st.gup[g]&&st.gup[g][x.id]===1&&x.fx[key])v+=x.fx[key];return v}
+const umax=u=>Math.round(TYPES[u.type].max+((st.ub||{})[FAM[u.type]]||0)-(u.der||0)+ufx(u,'max'));
+const umin=u=>Math.max(0,Math.round(TYPES[u.type].min+ufx(u,'min')));
+const uramp=u=>TYPES[u.type].ramp*(1+ufx(u,'ramp'));
+const ucost=u=>TYPES[u.type].cost*(1+ufx(u,'cost'));
+const ustart=u=>(TYPES[u.type].start||0)*(1+ufx(u,'start'));
+const ustartCost=u=>(TYPES[u.type].startCost||0)*(1+ufx(u,'startCost'));
+const TAB={cc:'swing',nuc:'base',smr:'base',coal:'base',coalb:'base',gas:'swing',gasb:'swing',hydro:'green'};
 // build shop: price in $, what it adds; everything comes online at the start of the next day
 const SHOP=[
   {id:'gasb',name:'Gas peaker',spec:'200 MW · start 6 s · fast ramp, $85/MWh fuel',price:1.2e6},
@@ -165,9 +229,39 @@ const SHOP=[
   {id:'wind',name:'Wind farm',spec:'+200 MW · free, output rises and falls with the wind (often stronger at night)',price:1.4e6},
   {id:'bat',name:'Battery expansion',spec:'Levels up your newest battery: +100 MW / +200 MWh. Batteries max out at level 5; after that you get a new battery at level 1',price:0.9e6},
   {id:'res',name:'Reservoir upgrade',spec:'+400 MWh of water for the hydro plant, refilled every night',price:0.8e6},
+  {id:'cc',name:'Combined-cycle plant',spec:'450 MW · gas turbine whose exhaust feeds an HRSG and steam turbine · start 45 s · $45/MWh fuel · mid-merit: cheaper than a peaker, quicker than coal',price:2.6e6},
   {id:'coalb',name:'Coal unit',spec:'300 MW · start 25 s · $30/MWh fuel',price:2.0e6},
   {id:'smr',name:'Small modular reactor',spec:'300 MW · start 40 s · min 100 · slow ramp, $12/MWh fuel',price:3.5e6}
 ];
+// workforce & reliability: one-time purchases, effective immediately
+const WF=[
+  {id:'crew1',name:'In-house maintenance team',spec:'Repairs 40% faster and 25% cheaper',price:1.5e6,
+   learn:'Contract crews have to mobilize, travel and learn your plant before they can start. A staffed maintenance shop already knows the equipment and keeps common parts on the shelf, so repairs start sooner and cost less.'},
+  {id:'crew2',req:'crew1',name:'OEM-certified expert crew',spec:'Another 40% faster and 25% cheaper',price:3.0e6,
+   learn:'Technicians trained and certified by the equipment manufacturer (the OEM) can do jobs like turbine blade inspections or generator rewinds without waiting on a factory rep to fly in.'},
+  {id:'train1',name:'Operator training program',spec:'Unit trips happen on fewer days (55% → 35%)',price:1.2e6,
+   learn:'Many trips start as operator or procedure errors: a valve lined up wrong, an alarm missed, a protective setpoint bumped during a test. Formal qualification programs and drills cut those mistakes.'},
+  {id:'train2',req:'train1',name:'Full-scope simulator training',spec:'Unit trips even rarer (35% → 20%)',price:2.5e6,
+   learn:'A full-scope simulator is an exact replica of the control room driven by a plant model. Crews practice trips, fires and grid emergencies there, the way pilots train in flight simulators.'},
+  {id:'pdm',name:'Predictive maintenance',spec:'About 1 game hour of warning before a unit trips. Ease it below 70% or take it offline and the trip never happens',price:2.0e6,
+   learn:'Vibration sensors, oil analysis and thermal imaging catch a failing bearing, pump or breaker days or hours before it lets go, so the unit can be taken down on your schedule instead of tripping.'},
+  {id:'spares',name:'Spare transformer & parts inventory',spec:'Disasters that would permanently downgrade equipment only damage it half the time',price:1.8e6,
+   learn:'Large power transformers can take a year or more to manufacture. Utilities share and stockpile spares so a failed unit can be swapped in days instead of losing that capacity for good.'}
+];
+const wf=id=>!!(st.wf&&st.wf[id]);
+const crewT=()=>(wf('crew1')?.6:1)*(wf('crew2')?.6:1),crewC=()=>(wf('crew1')?.75:1)*(wf('crew2')?.75:1);
+const repTime=u=>(u.type==='nuc'||u.type==='smr'?40:20)*crewT();
+const tripOdds=()=>wf('train2')?.2:wf('train1')?.35:.55;
+// ================= THE EXPANSION (day 30+) =================
+const EXP_DAY=30,CONTRACT_RATE=90,SHORT_PEN=400;
+const THERMAL=['nuc','smr','coal','coalb','gas','gasb','cc'];
+function priceAt(t){const E=st.exp;if(!E)return 0;
+  let p=(22+30*g(t,8.5,2)+70*g(t,18.5,2.5)+15*g(t,13,3))*(1+.01*(st.day-E.start))*(st.heat?1.3:1);
+  if(E.spike&&E.spike.left>0)p+=E.spike.add*Math.min(1,E.spike.left);return Math.round(p)}
+const contractMW=d=>200+15*(d-st.exp.start);
+// schedule ramps in 15:30–16:00 and out 21:00–21:30, like a real interchange schedule
+const cShape=t=>t<15.5||t>=21.5?0:t<16?(t-15.5)/.5:t<21?1:(21.5-t)/.5;
+const contractAt=t=>st.exp?Math.round(contractMW(st.day)*cShape(t%24)):0;
 let resumeOv=null;
 
 let okT=0,st,last=performance.now(),acc=0,saveT=0,histT=0;
@@ -177,7 +271,7 @@ const batName=i=>st.bats.length>1?'Battery '+(i+1):'Battery';
 function fresh(best){
   return{t:5,day:1,money:0,f:60,res:RES,shed:0,noise:0,cloud:1,cloudT:1,ev:planDay(1),heat:false,
     u:{nuc:{type:'nuc',s:'on',p:600,sp:600},coal:{type:'coal',s:'on',p:400,sp:400},gas:{type:'gas',s:'off',p:0,sp:150,tmr:0},hydro:{type:'hydro',s:'on',p:50,sp:50,agc:false}},
-    bats:[newBat()],solarCap:380,windCap:0,wind:.5,windT:.5,pending:[],built:{},cnt:{},ub:{},resCap:RES,sr:6,ss:19,windOut:0,hist:[],alarm:{lvl:'',msg:'System normal'},lowT:0,hiT:0,ufCd:0,
+    bats:[newBat()],solarCap:380,windCap:0,wind:.5,windT:.5,pending:[],built:{},cnt:{},ub:{},wf:{},exp:null,ex:0,gup:{solar:{},wind:{}},upBought:{},tab:'base',resCap:RES,sr:6,ss:19,windOut:0,hist:[],alarm:{lvl:'',msg:'System normal'},lowT:0,hiT:0,ufCd:0,
     dayStats:{profit:0,uns:0,fmin:60,fmax:60,sheds:0},speed:1,paused:true,over:false,phase:'intro',best:best||0};
 }
 function planDay(d){
@@ -186,7 +280,8 @@ function planDay(d){
   else{
     if(r()<.75)ev.push({type:'cloud',h:9.5+r()*5,dur:1+r()*1.5});
     if(d>=3&&r()<.6)ev.push({type:'heat'});
-    if(r()<.55)ev.push({type:'trip',h:8+r()*12,unit:r()<.7?'coal':'nuc'});
+    if(r()<(st?tripOdds():.55))ev.push({type:'trip',h:8+r()*12});
+    if(st&&st.exp&&r()<.25)ev.push({type:'spike',h:9+r()*11});
     if(d>=5)for(const x of DIS)if(r()<x.p)ev.push({type:'dis',k:x.k,h:x.h?x.h():6+r()*14});
   }
   return ev;
@@ -206,15 +301,17 @@ const DIS=[
 const disName=k=>DIS.find(d=>d.k===k).name;
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const liveUnits=f=>Object.keys(st.u).filter(k=>st.u[k].s!=='build'&&(!f||f(st.u[k],k)));
-function log(msg){(st.dayLog=st.dayLog||[]).push(fmt(st.t)+' '+msg)}
+function log(msg){(st.dayLog=st.dayLog||[]).push(fmt(st.t)+' '+msg);if(st.away)st.awayRep.log.push('Day '+st.day+' '+fmt(st.t)+' '+msg)}
 function damage(k,quiet){
   const u=st.u[k];if(!u)return;
   const c=TYPES[u.type],nm=u.name||c.name;
-  u.s='dmg';u.p=0;u.rc=Math.round(umax(u)*1000*(u.type==='nuc'||u.type==='smr'?1.5:1));
+  u.s='dmg';u.p=0;u.rc=Math.round(umax(u)*1000*(u.type==='nuc'||u.type==='smr'?1.5:1)*crewC());
   if(quiet)return;alarm('a',nm+' DAMAGED: offline until repaired ($'+Math.round(u.rc/1000)+'k)');log(nm+' damaged');
 }
 // knock a target down one level; can remove it from the grid entirely
 function downgrade(t){
+  if(wf('spares')&&Math.random()<.5){const nm=t==='solar'?'Solar farm':t==='wind'?'Wind farm':typeof t==='number'?batName(t):st.u[t]?(st.u[t].name||TYPES[st.u[t].type].name):'';
+    if(!nm)return;if(st.u[t])damage(t,true);alarm('w','Spare parts saved '+nm+' from permanent damage'+(st.u[t]?' (needs repair)':''));log('Spares saved '+nm+' from a downgrade');buildUnits();return}
   if(t==='solar'){if(st.solarCap<=0)return;st.solarCap=Math.max(0,st.solarCap-200);
     const m=st.solarCap?'Solar farm lost 200 MW of panels':'Solar farm destroyed';alarm('a',m.toUpperCase());log(m);buildUnits();return}
   if(t==='wind'){if(st.windCap<=0)return;st.windCap=Math.max(0,st.windCap-200);
@@ -226,7 +323,7 @@ function downgrade(t){
     buildUnits();return}
   const u=st.u[t];if(!u)return;const c=TYPES[u.type],nm=u.name||c.name;
   u.der=(u.der||0)+100;
-  if(umax(u)<c.min+50){delete st.u[t];alarm('a',nm.toUpperCase()+' DESTROYED: removed from the grid');log(nm+' destroyed');buildUnits();return}
+  if(umax(u)<umin(u)+50){delete st.u[t];alarm('a',nm.toUpperCase()+' DESTROYED: removed from the grid');log(nm+' destroyed');buildUnits();return}
   damage(t,true);alarm('a',nm+' downgraded to '+umax(u)+' MW max and offline until repaired');log(nm+' downgraded to '+umax(u)+' MW max (needs repair)');buildUnits();
 }
 function anyTarget(){
@@ -242,7 +339,7 @@ function disaster(e){
   if(k==='ice'){log('Ice storm took down lines');const u=liveUnits(u=>u.s!=='dmg');if(u.length&&R()<.6)damage(pick(u));else alarm('w','Ice storm: lines holding')}
   if(k==='fire'){log('Wildfire reached the plants');if(st.solarCap>0&&R()<.3)downgrade('solar');else{const u=liveUnits(u=>u.s!=='dmg');if(u.length&&R()<.6)damage(pick(u));else alarm('w','Wildfire: crews held the line')}}
   if(k==='tornado'){if(!e.w)return;log('Tornado touched down');alarm('a','TORNADO touched down in your service area');const n=R()<.4?2:1;for(let i=0;i<n;i++)hitTarget(.6)}
-  if(k==='flood'){log('Flood waters reached a plant');const u=liveUnits(u=>['nuc','coal','coalb','smr','gas','gasb'].includes(u.type)&&u.s!=='dmg');if(u.length){const x=pick(u);if(R()<.25)downgrade(x);else damage(x)}}
+  if(k==='flood'){log('Flood waters reached a plant');const u=liveUnits(u=>['nuc','coal','coalb','smr','gas','gasb','cc'].includes(u.type)&&u.s!=='dmg');if(u.length){const x=pick(u);if(R()<.25)downgrade(x);else damage(x)}}
   if(k==='quake'){log('Earthquake');alarm('a','EARTHQUAKE: units tripping');
     for(const x of liveUnits(u=>u.s==='on').sort(()=>R()-.5).slice(0,2)){const u=st.u[x];u.s='trip';u.p=0;u.tmr=8}
     st.res*=.7;downgrade(anyTarget())}
@@ -258,7 +355,8 @@ function demand(t){
   if(st.ice)sh*=1.08;
   return base*sh*(1+st.noise)+(st.met?st.met.mw*st.met.ramp:0);
 }
-const solarAt=t=>st.curtS?0:st.solarCap*sun(t)*st.cloud*(st.smoke?.5:1);
+const curtS=()=>st.away?!!st.apCS:st.curtS,curtW=()=>st.away?!!st.apCW:st.curtW;
+const solarAt=t=>{if(curtS())return 0;const s0=sun(t),sh=gfx('solar','track')?Math.pow(s0,.55):s0;return st.solarCap*sh*st.cloud*(st.smoke?.5:1)*(1+gfx('solar','gain'))};
 const sun=t=>{const a=st.sr||6,b=st.ss||19;return t>a&&t<b?Math.sin(Math.PI*(t-a)/(b-a)):0};
 function planSun(){st.sr=5.5+Math.random()*1.5;st.ss=18+Math.random()*2}
 const fmt=t=>{const h=Math.floor(t)%24,m=Math.floor((t%1)*60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')};
@@ -277,13 +375,19 @@ function step(dt){
       if(e.k==='tornado'&&!e.w&&t>=e.h-.5){e.w=1;alarm('a','TORNADO WARNING: touchdown expected within the hour')}
       if(!e.a&&t>=e.h){e.a=1;disaster(e)}
     }
-    if(e.type==='trip'&&!e.a&&t>=e.h){
-      e.a=1;const u=st.u[e.unit];
-      if(u&&(u.s==='on'||u.s==='start')){
-        if(e.unit==='nuc'){u.p=Math.max(0,u.p-300);alarm('a','Nuclear runback: lost 300 MW')}
-        else{u.s='trip';u.p=0;u.tmr=8;alarm('a','COAL UNIT TRIPPED — 0 MW')}
-      }
+    if(e.type==='trip'){
+      if(!e.unit&&t>=e.h-1){const c=Object.keys(st.u).filter(k=>st.u[k].s==='on'&&THERMAL.includes(st.u[k].type));e.unit=c.length?pick(c):'none';
+        if(wf('pdm')&&st.u[e.unit])alarm('a','PREDICTIVE MAINT.: '+(st.u[e.unit].name||TYPES[st.u[e.unit].type].name)+' vibration rising. Ease it below 70% or take it offline within the hour to avoid a trip')}
+      if(!e.a&&t>=e.h){e.a=1;const u=st.u[e.unit];
+        const eased=u&&wf('pdm')&&u.s==='on'&&u.p<=.7*umax(u);
+        if(eased)log((u.name||TYPES[u.type].name)+': trip avoided (eased off after warning)');
+        else if(u&&(u.s==='on'||u.s==='start')){const nm=u.name||TYPES[u.type].name;
+          if(u.type==='nuc'||u.type==='smr'){const lost=Math.round(u.p/2);u.p-=lost;u.sp=Math.max(umin(u),u.sp-lost);alarm('a',nm+' runback: lost '+lost+' MW');log(nm+' runback')}
+          else{u.s='trip';u.p=0;u.tmr=8;alarm('a',nm.toUpperCase()+' TRIPPED: 0 MW');log(nm+' tripped')}}
+        else if(u&&wf('pdm'))log((u.name||TYPES[u.type].name)+': trip avoided (taken offline after warning)')}
     }
+    if(e.type==='spike'&&st.exp&&!e.a&&t>=e.h){e.a=1;st.exp.spike={left:2,add:200+Math.round(Math.random()*150)};
+      alarm('w','MARKET: neighbor lost a plant, prices spiking for ~2 h');log('Price spike (neighbor plant trip)')}
   }
   st.noise+=(Math.random()-.5)*.003*dt;st.noise*=1-.03*dt;st.noise=Math.max(-.015,Math.min(.015,st.noise));
   st.cloud+=(st.cloudT-st.cloud)*Math.min(1,.35*dt);
@@ -292,29 +396,32 @@ function step(dt){
     if(st.windCap&&st.windT-nt>.4)alarm('w','Wind forecast: dropping off soon');st.windT=nt}
   st.wind+=(st.windT-st.wind)*Math.min(1,.06*dt);
   const load=demand(t),served=Math.max(0,load-st.shed);
-  const solar=st.curtS?0:st.solarCap*sun(t)*st.cloud*(st.smoke?.5:1);
-  const wT=st.curtW||st.ice?0:st.windCap*st.wind;st.windOut+=Math.max(-25*dt,Math.min(25*dt,wT-st.windOut));const wind=st.windOut;
+  const solar=solarAt(t);
+  const wT=curtW()||(st.ice&&!gfx('wind','deice'))?0:st.windCap*Math.min(1,st.wind*(1+gfx('wind','gain')));st.windOut+=Math.max(-25*dt,Math.min(25*dt,wT-st.windOut));const wind=st.windOut;
   // units
   let gen=solar+wind,cost=0;
-  const agcCap=Object.values(st.u).reduce((a,u)=>a+(u.agc&&u.s==='on'?umax(u):0),0)||1;
+  const agcCap=Object.values(st.u).reduce((a,u)=>a+((u.agc||st.away)&&u.s==='on'?umax(u):0),0)||1;
+  const othersUp=st.away?Object.entries(st.u).reduce((a,[k,u])=>a+(k!=='hydro'&&u.s==='on'?umax(u)-u.p:0),0):0;
   for(const k in st.u){
     const u=st.u[k],c=TYPES[u.type];
     if(u.s==='build'||u.s==='dmg'){u.p=0;continue}
-    if(u.s==='rep'){u.p=0;u.tmr-=dt;if(u.tmr<=0){u.s=c.start?'off':'on';u.p=0;alarm('',(u.name||c.name)+' repaired'+(c.start?': ready to start':''))}continue}
-    if(u.s==='start'){u.tmr-=dt;if(u.tmr<=0){u.s='on';alarm('','Unit '+(u.name||c.name)+' synchronized')}}
+    if(u.s==='rep'){u.p=0;u.tmr-=dt;if(u.tmr<=0){u.s=c.start?'off':'on';u.p=0;u.sp=umin(u);if(!st.away)alarm('',(u.name||c.name)+' repaired'+(c.start?': ready to start':''))}continue}
+    if(u.s==='start'){u.tmr-=dt;if(u.tmr<=0){u.s='on';if(!st.away)alarm('','Unit '+(u.name||c.name)+' synchronized')}}
     if(u.s==='trip'){u.tmr-=dt;if(u.tmr<=0)u.s='off'}
-    if(u.agc&&u.s==='on'){const sh=umax(u)/agcCap;u.sp=u.sp-(st.f-60)*500*sh*dt;
-      u.sp=Math.max(c.min,Math.min(umax(u),Math.max(u.p-c.ramp*1.5,Math.min(u.p+c.ramp*1.5,u.sp))))}
-    let tgt=u.s==='on'?Math.max(c.min,Math.min(umax(u),u.sp)):0;
+    const mn=umin(u),mx=umax(u),rp=uramp(u);
+    if(st.away&&k==='hydro'&&u.s==='on'&&othersUp>60&&st.f>59.85){u.sp=Math.max(mn,u.sp-15*dt)}
+    else if((u.agc||st.away)&&u.s==='on'){const sh=mx/agcCap;u.sp=u.sp-(st.f-60)*500*sh*dt;
+      u.sp=Math.max(mn,Math.min(mx,Math.max(u.p-rp*1.5,Math.min(u.p+rp*1.5,u.sp))))}
+    let tgt=u.s==='on'?Math.max(mn,Math.min(mx,u.sp)):0;
     if(k==='hydro'&&st.res<=0)tgt=0;
-    const r=c.ramp*dt;u.p+=Math.max(-r,Math.min(r,tgt-u.p));
+    const r=rp*dt;u.p+=Math.max(-r,Math.min(r,tgt-u.p));
     u.p=Math.max(u.p,0);
-    gen+=u.p;cost+=u.p*dh*c.cost;
-    if(k==='hydro')st.res=Math.max(0,st.res-u.p*dh);
+    gen+=u.p;cost+=u.p*dh*ucost(u);
+    if(k==='hydro')st.res=Math.max(0,st.res-u.p*dh*(1+ufx(u,'water')));
   }
   // auto mode: droop response, full output at ~0.13 Hz deviation
   st.bats.forEach((b,i)=>{
-    let bt=b.auto?-(st.f-60)*7.5*b.mw:b.sp;
+    let bt=(b.auto||st.away)?-(st.f-60)*7.5*b.mw:b.sp;
     const tz=.2*b.cap,chMax=b.mw*Math.max(0,Math.min(1,(b.cap-b.soc)/tz)),disMax=b.mw*Math.max(0,Math.min(1,b.soc/tz));
     bt=Math.max(-chMax,Math.min(disMax,bt));
     b.p+=Math.max(-300*dt,Math.min(300*dt,bt-b.p));
@@ -325,25 +432,108 @@ function step(dt){
     if(pc<.15&&b.p>5&&!b.ew){b.ew=1;alarm('w',nm+' near empty: it will soon stop covering shortfall')}if(pc>.25)b.ew=0;
   });
   st.windP=wind;
+  // interconnection: scheduled exports (+) / imports (−)
+  let ex=0;
+  if(st.exp){const E=st.exp,price=priceAt(t),cNow=contractAt(t),cut=st.away?!!E.apCut:!!E.cut,cDel=cut?0:Math.min(cNow,E.cap);
+    if(E.spike&&E.spike.left>0)E.spike.left-=dh;
+    if(st.away||E.auto){const on=Object.values(st.u).filter(u=>u.s==='on');
+      const spare=on.reduce((a,u)=>a+umax(u)-u.p,0),down=on.reduce((a,u)=>a+u.p-umin(u),0);
+      const marg=on.filter(u=>u.p>umin(u)+5).map(u=>u.type==='hydro'?50:ucost(u));const mc=marg.length?Math.max(...marg):0;
+      let w=E.tr||0;const tt=t%24,soon=tt>=14&&tt<21.5;
+      if(soon&&w<0)w=Math.min(0,w+90*dt);
+      else if(st.f<59.85||spare<80)w-=60*dt;else if(price>mc+8&&spare>150)w+=30*dt;else if(price<mc-8&&down>150)w-=30*dt;else if(w<0&&(down<60||price>mc))w+=40*dt;else if(w>0&&price<mc)w-=30*dt;
+      E.tr=Math.max(-E.cap,Math.min(E.cap-cDel,w))}
+    else E.tr=Math.max(-E.cap,Math.min(E.cap-cDel,E.man||0));
+    const tgt=Math.max(-E.cap,Math.min(E.cap,cDel+E.tr));E.flow+=Math.max(-60*dt,Math.min(60*dt,tgt-E.flow));ex=E.flow;
+    const toC=Math.min(Math.max(ex,0),cNow),rev=toC*dh*CONTRACT_RATE+(ex-toC)*dh*price,pen=Math.max(0,cNow-toC-1)*dh*SHORT_PEN;
+    st.money+=rev-pen;const tv=(ex-toC)*dh*price;if(tv>=0)st.dayStats.sold=(st.dayStats.sold||0)+tv;else st.dayStats.bought=(st.dayStats.bought||0)-tv;st.dayStats.trade=(st.dayStats.trade||0)+tv;st.dayStats.contract=(st.dayStats.contract||0)+toC*dh*CONTRACT_RATE;st.dayStats.pen=(st.dayStats.pen||0)+pen;
+    st.price=price}
+  st.ex=ex;
   // frequency
-  st.f+=((gen-served)-D*(st.f-60))/M*dt;
+  st.f+=((gen-served-ex)-D*(st.f-60))/M*dt;
   st.gen=gen;st.load=load;st.served=served;st.solar=solar;
   // protection
   st.ufCd-=dt;
-  if(st.f<59.3&&st.ufCd<=0&&st.shed<load*.35){st.shed+=150;st.ufCd=2;st.money-=20000;st.dayStats.sheds++;alarm('a','UFLS: 150 MW of customers dropped')}
+  if(st.f<59.3&&st.ufCd<=0&&st.shed<load*.35){st.shed+=150;st.ufCd=2;st.money-=20000;st.dayStats.sheds++;if(st.away)st.awayRep.sheds++;alarm('a','UFLS: 150 MW of customers dropped')}
   st.lowT=st.f<59?st.lowT+dt:0;st.hiT=st.f>61?st.hiT+dt:0;
-  if(st.lowT>1||st.hiT>1){blackout(st.f<60?'Frequency collapsed below 59 Hz':'Overspeed: frequency ran above 61 Hz');return}
+  if(!st.away&&(st.lowT>1||st.hiT>1)){blackout(st.f<60?'Frequency collapsed below 59 Hz':'Overspeed: frequency ran above 61 Hz');return}
   if(st.f<59.6&&st.alarm.lvl!=='a')st.alarm={lvl:'w',msg:fmt(t)+'  Low frequency'};
   if(st.f>60.4&&st.alarm.lvl!=='a')st.alarm={lvl:'w',msg:fmt(t)+'  High frequency'};
   // money
   const unserved=st.shed*dh,profit=served*dh*60-cost-unserved*1000;
   st.money+=profit;st.dayStats.profit+=profit;st.dayStats.uns+=unserved;
   st.dayStats.fmin=Math.min(st.dayStats.fmin,st.f);st.dayStats.fmax=Math.max(st.dayStats.fmax,st.f);
-  histT+=dt;if(histT>=.5){histT=0;st.hist.push([served,gen-solar-wind]);if(st.hist.length>140)st.hist.shift()}
+  histT+=dt;if(histT>=.5){histT=0;st.hist.push([served+ex,gen-solar-wind]);if(st.hist.length>140)st.hist.shift()}
   st.t+=dh;
   if(st.t>=24){st.t-=24;endDay()}
 }
 
+// ---------- autopilot: runs the grid while the app is closed ----------
+const AWAY_CAP=72,AWAY_MIN=5/60;   // hours: cap, and minimum gap worth simulating
+function autopilot(dt){
+  const ap=st.ap=st.ap||{cd:0,starts:0,stops:0};ap.cd-=dt;
+  const R=st.awayRep;
+  // repair anything damaged right away
+  for(const k in st.u){const u=st.u[k];if(u.s==='dmg'){st.money-=u.rc;R.repCost+=u.rc;R.repairs++;u.s='rep';u.tmr=repTime(u);
+    R.log.push('Day '+st.day+' '+fmt(st.t)+' Autopilot repaired '+(u.name||TYPES[u.type].name)+' ('+money(u.rc)+')')}}
+  const U=Object.values(st.u);
+  const up=U.filter(u=>u.s==='on'||u.s==='start').reduce((a,u)=>a+(umax(u)-(u.s==='on'?u.p:0)),0);
+  const down=U.filter(u=>u.s==='on').reduce((a,u)=>a+Math.max(0,u.p-umin(u)),0);
+  const t=st.t,rise=Math.max(0,demand((t+1)%24)-demand(t))+Math.max(0,solarAt(t)-solarAt((t+1)%24));
+  if(st.exp){if(st.shed>0||st.f<59.5)st.exp.apCut=true;else if(st.exp.apCut&&st.f>59.97&&up>contractMW(st.day)+200)st.exp.apCut=false}
+  // restore customers once there is room
+  if(st.shed>0&&up>250&&st.f>59.95){st.shed=Math.max(0,st.shed-150)}
+  // renewables: curtail only on a real surplus
+  if(st.f>60.35&&down<30){if(!st.apCW&&st.windCap)st.apCW=true;else st.apCS=true}
+  if(st.f<60.05&&down>120){st.apCS=false;st.apCW=false}
+  if(ap.cd>0)return;
+  // short on headroom: start the cheapest unit that can help in time
+  if(st.f<59.9||up<150+rise){
+    const off=Object.keys(st.u).filter(k=>st.u[k].s==='off'&&TYPES[st.u[k].type].start);
+    off.sort((a,b)=>{const A=st.u[a],B=st.u[b],urgent=st.f<59.7;return urgent?ustart(A)-ustart(B):ucost(A)-ucost(B)});
+    if(off.length){const u=st.u[off[0]];u.s='start';u.tmr=ustart(u);u.p=0;u.sp=umin(u);st.money-=ustartCost(u);ap.starts++;ap.cd=4;return}
+  }
+  // economics: shut down the priciest startable unit if the rest can carry its load with margin
+  const on=Object.keys(st.u).filter(k=>st.u[k].s==='on'&&TYPES[st.u[k].type].start).sort((a,b)=>ucost(st.u[b])-ucost(st.u[a]));
+  if(on.length&&st.f>59.95){const x=st.u[on[0]];
+    const spare=Object.values(st.u).filter(u=>u!==x&&u.s==='on').reduce((a,u)=>a+(umax(u)-u.p),0);
+    if((st.f>60.2&&down<20)||spare>x.p+200+rise){x.s='off';ap.stops++;ap.cd=8}}
+}
+function catchUp(ms){
+  if(!st||st.over||st.phase==='intro'||!(ms>0))return false;
+  let hrs=ms/36e5;if(hrs<AWAY_MIN)return false;
+  const capped=hrs>AWAY_CAP;hrs=Math.min(hrs,AWAY_CAP);
+  if(st.phase==='day')st.phase='pause';
+  st.away=true;st.ap={cd:0,starts:0,stops:0};st.apCS=false;st.apCW=false;
+  st.awayRep={hrs,capped,from:{day:st.day,t:st.t},money0:st.money,sheds:0,repairs:0,repCost:0,uns:0,log:[],days:[]};
+  const uns0=st.dayStats.uns,dt=.05,n=Math.ceil(hrs/(dt*HPS));
+  let unsAcc=0,lastUns=st.dayStats.uns;
+  for(let i=0;i<n;i++){autopilot(dt);step(dt);
+    if(st.dayStats.uns<lastUns)unsAcc+=lastUns;lastUns=st.dayStats.uns}
+  st.awayRep.uns=unsAcc+st.dayStats.uns-uns0;
+  st.away=false;st.lowT=0;st.hiT=0;st.hist=[];st.autoSlow=false;st.speed=1;
+  st.paused=true;st.phase='pause';st.savedAt=Date.now();
+  buildUnits();save();showAway();
+  return true;
+}
+function showAway(){
+  const R=st.awayRep,h=R.hrs,dur=h>=24?Math.floor(h/24)+' d '+Math.round(h%24)+' h':h>=1?Math.floor(h)+' h '+Math.round(h%1*60)+' min':Math.round(h*60)+' min';
+  const d=st.money-R.money0,lg=R.log.slice(-14);
+  showOv(`<h2>While you were away</h2>
+  <p><b>${dur}</b> passed in real time${R.capped?' (capped at 72 h)':''}. The autopilot ran the grid from day ${R.from.day} ${fmt(R.from.t)} to <b>day ${st.day} ${fmt(st.t)}</b>.</p>
+  <ul><li>Bank: ${money(R.money0)} → <b>${money(st.money)}</b> (${d>=0?'+':'−'}${money(Math.abs(d)).replace('$','$')})</li>
+  ${R.days.length?`<li>Days completed: <b>${R.days.length}</b></li>`:''}
+  <li>Customer blocks shed: <b>${R.sheds}</b>${R.uns>1?` · ${Math.round(R.uns)} MWh unserved`:''}</li>
+  ${R.sheds?`<li class="note">Shedding happens when demand outruns everything you own. More capacity (or batteries) is the fix, not better driving.</li>`:''}
+  <li>Repairs: <b>${R.repairs}</b>${R.repairs?` (${money(R.repCost)})`:''} · Unit starts: ${st.ap.starts} · Shutdowns: ${st.ap.stops}</li></ul>
+  ${lg.length?`<p class="fc">Incident log${R.log.length>14?' (latest 14)':''}</p><ul>${lg.map(x=>`<li>${x}</li>`).join('')}</ul>`:'<p class="note">Quiet stretch: no incidents.</p>'}
+  ${st.awayRep.expNew?EXP_HTML():''}
+  ${learnHTML(st.learn)}
+  <p class="note">The autopilot plays it safe and can’t black out the grid, but it runs costlier than you would. Your own settings (AGC, curtail, setpoints) are as you left them${st.curtS||st.curtW?'. Solar or wind is still curtailed on your controls':''}.</p>
+  <button class="btn pri" id="go">Take the controls</button>`);
+  st.learn=[];
+  $('go').onclick=()=>{hideOv();st.paused=false;st.phase='run';alarm('','Back on manual control')};
+}
 function blackout(why){
   st.over=true;st.paused=true;st.phase='over';
   const days=st.day-1;
@@ -358,16 +548,25 @@ function endDay(){
   const s=st.dayStats;
   if(st.day>st.best){st.best=st.day;store('go-best',st.best)}
   st.day++;st.ev=planDay(st.day);planSun();st.heat=st.ev.some(e=>e.type==='heat');
+  let expNew=false;if(!st.exp&&st.day>=EXP_DAY){st.exp={start:st.day,cap:400,flow:0,tr:0,man:0,auto:true,cut:false};expNew=true;st.ev.push({type:'spike',h:12+Math.random()*6});buildUnits()}
   const done=commission();
   const has=k=>st.ev.some(e=>e.type==='dis'&&e.k===k);
   st.ice=has('ice');st.smoke=has('fire');
   st.res=st.resCap*(has('drought')?.4:has('flood')?1.4:1);
-  st.paused=true;st.phase='day';
-  st.lastDay={n:st.day-1,profit:s.profit,fmin:s.fmin,fmax:s.fmax,sheds:s.sheds,done,log:st.dayLog||[]};
+  st.lastDay={n:st.day-1,profit:s.profit,fmin:s.fmin,fmax:s.fmax,sheds:s.sheds,done,log:st.dayLog||[],learn:st.learn||[],trade:s.trade||0,sold:s.sold||0,bought:s.bought||0,contract:s.contract||0,pen:s.pen||0,expNew};
+  if(st.away&&expNew)st.awayRep.expNew=true;
+  if(!st.away)st.learn=[];
   st.dayLog=[];
   st.dayStats={profit:0,uns:0,fmin:60,fmax:60,sheds:0};
+  if(st.away){st.awayRep.days.push(st.lastDay);for(const d of done)st.awayRep.log.push('Day '+st.day+' 00:00 Online: '+d.replace(/<[^>]+>/g,''));return}
+  st.paused=true;st.phase='day';
   showDay();save();
 }
+const learnHTML=a=>a&&a.length?`<p class="fc">What your crews installed overnight</p>${a.map(l=>`<div class="learn"><b>${l.pn}: ${l.name}</b> <span class="note">(${l.fx})</span><p>${l.txt}</p></div>`).join('')}`:'';
+const EXP_HTML=()=>`<div class="exph"><h3>The Expansion</h3><p>Your grid is now tied to the regional market through a <b>${st.exp.cap} MW tie line</b>.</p>
+  <ul><li><b>Firm contract:</b> the neighbor needs <b>${contractMW(st.day)} MW</b> from 16:00 to 21:00 every day, paid $${CONTRACT_RATE}/MWh. It grows by 15 MW a day. Every MWh you fail to deliver costs $${SHORT_PEN}.</li>
+  <li><b>Market:</b> prices swing hour to hour, cheap overnight and high at the evening peak, with spikes when the neighbor loses a plant. Export surplus when the price beats your costs, import when it’s cheaper than running your own units.</li>
+  <li>Exports count as load on your grid, so watch your headroom during the contract window. More tie-line capacity is in the Build shop.</li></ul></div>`;
 const broken=()=>Object.values(st.u).filter(u=>u.s==='dmg').map(u=>u.name||TYPES[u.type].name);
 function showDay(){
   const s=st.lastDay;
@@ -376,15 +575,19 @@ function showDay(){
     'Demand is up '+Math.round(5*(st.day-1))+'% over day 1.'];
   const pend=pendingList();
   showOv(`<h2>Day ${s.n} complete</h2>
-  <ul><li>Profit: <b>${money(s.profit)}</b> · Bank: <b>${money(st.money)}</b></li><li>Frequency range: <b>${s.fmin.toFixed(2)}–${s.fmax.toFixed(2)} Hz</b></li>
+  ${s.expNew?EXP_HTML():''}
+  <ul><li>Profit: <b>${money(s.profit)}</b> · Bank: <b>${money(st.money)}</b></li>
+  ${st.exp&&!s.expNew?`<li>Contract income: <b>${money(s.contract)}</b>${s.pen>1?` · Shortfall penalties: <b>−${money(s.pen)}</b>`:''}</li><li>Market: sold <b>${money(s.sold)}</b> · bought <b>${money(s.bought)}</b> (imports that replaced costlier generation)</li>`:''}<li>Frequency range: <b>${s.fmin.toFixed(2)}–${s.fmax.toFixed(2)} Hz</b></li>
   <li>Customer blocks shed: <b>${s.sheds}</b></li></ul>
   ${s.log&&s.log.length?`<p class="fc">Incident log</p><ul>${s.log.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}
   ${broken().length?`<p class="fc">Still damaged</p><p>${broken().join(', ')}. Repair from the plant’s card.</p>`:''}
   ${s.done.length?`<p class="fc">Now online</p><p>${s.done.join(', ')}</p>`:''}
+  ${learnHTML(s.learn)}
   ${pend.length?`<p class="fc">Under construction</p><p>${pend.join(', ')}. Ready tomorrow.</p>`:''}
-  <p class="fc">Tomorrow’s forecast</p><p>${fc.join(' ')}</p>
+  <p class="fc">Tomorrow’s forecast</p><p>${fc.join(' ')}${st.exp?` Contract: <b>${contractMW(st.day)} MW</b> from 16:00–21:00 on a ${st.exp.cap} MW tie line${contractMW(st.day)>st.exp.cap-50?' (<b>almost out of tie capacity</b>: upgrade in Build)':''}.`:''}</p>
   ${st.ev.filter(e=>e.type==='dis'&&DIS.find(d=>d.k===e.k).fc).map(e=>`<p class="warnp">${DIS.find(d=>d.k===e.k).fc}</p>`).join('')}
   ${st.day===4?'<p class="note">Heads up: from day 5 on, natural disasters can strike.</p>':''}
+  ${st.day===EXP_DAY-1?'<p class="warnp">Tomorrow is day 30: <b>The Expansion</b> opens a regional market and a firm evening delivery contract. Leave yourself some evening headroom.</p>':''}
   <ul><li>Sunrise <b class="num">${fmt(st.sr)}</b> · Sunset <b class="num">${fmt(st.ss)}</b> (${Math.floor(dl)} h ${Math.round(dl%1*60)} m of daylight)</li>
   <li>Solar peaks near <b class="num">${fmt((st.sr+st.ss)/2)}</b> at up to <b>${sunPk} MW</b> in clear sky</li></ul><p class="note">Reservoir at ${Math.round(st.res/st.resCap*100)}% for tomorrow.</p>
   <div class="row"><button class="btn pri" id="go">Start day ${st.day}</button><button class="btn" id="shopb">Build plants</button></div>`);
@@ -394,16 +597,19 @@ function showDay(){
 // ---------- building ----------
 const shopItem=id=>SHOP.find(s=>s.id===id);
 function pendingList(){
-  return [...st.pending.map(id=>shopItem(id).name),...Object.values(st.u).filter(u=>u.s==='build').map(u=>u.name)];
+  const ups=[];for(const k in st.u){const u=st.u[k];if(u.up)for(const id in u.up)if(u.up[id]==='q')ups.push((u.name||TYPES[u.type].name)+' '+UPG[FAM[u.type]].find(x=>x.id===id).name.toLowerCase())}
+  for(const g of ['solar','wind'])for(const id in st.gup[g])if(st.gup[g][id]==='q')ups.push(g+' '+UPG[g].find(x=>x.id===id).name.toLowerCase());
+  return [...st.pending.map(id=>shopItem(id).name),...Object.values(st.u).filter(u=>u.s==='build').map(u=>u.name),...ups];
 }
 function buy(id){
   const it=shopItem(id);if(st.money<it.price)return;
   st.money-=it.price;st.built[id]=(st.built[id]||0)+1;
   if(TYPES[id]){const c=TYPES[id],n=st.built[id];
-    const num=id==='smr'?n:n+1;st.u[id+n]={type:id,name:c.name+(num>1?' '+num:''),s:'build',p:0,sp:c.min,tmr:0};buildUnits()}
+    const num=id==='smr'||id==='cc'?n:n+1;st.u[id+n]={type:id,name:c.name+(num>1?' '+num:''),s:'build',p:0,sp:c.min,tmr:0};buildUnits()}
   else st.pending.push(id);
   save();
 }
+function learned(pn,x,t){(st.learn=st.learn||[]).push({pn,name:x.name,txt:x.learn,fx:fxText(t,x)})}
 function commission(){
   const done=[];
   for(const id of st.pending){
@@ -416,7 +622,9 @@ function commission(){
     done.push(shopItem(id).name);count(id,done);
   }
   st.pending=[];
-  for(const k in st.u){const u=st.u[k];if(u.s==='build'){u.s='off';u.p=0;done.push(u.name);count(u.type,done)}}
+  for(const k in st.u){const u=st.u[k];if(u.s==='build'){u.s='off';u.p=0;done.push(u.name);count(u.type,done)}
+    if(u.up)for(const id in u.up)if(u.up[id]==='q'){u.up[id]=1;const x=UPG[FAM[u.type]].find(y=>y.id===id),pn=u.name||TYPES[u.type].name;done.push(pn+': '+x.name);learned(pn,x,k);count(u.type,done)}}
+  for(const g of ['solar','wind'])for(const id in st.gup[g])if(st.gup[g][id]==='q'){st.gup[g][id]=1;const x=UPG[g].find(y=>y.id===id),pn=(g==='solar'?'Solar':'Wind')+' farm';done.push(pn+': '+x.name);learned(pn,x,g);count(g,done)}
   buildUnits();return done;
 }
 function count(id,done){
@@ -426,7 +634,44 @@ function count(id,done){
   else st.ub[f]=(st.ub[f]||0)+100;
   done.push('<b>Bonus: +100 MW max on all '+FAMN[f]+'</b>');
 }
-function famBought(f){return SHOP.filter(it=>FAM[it.id]===f).reduce((a,it)=>a+(st.built[it.id]||0),0)}
+function famBought(f){return SHOP.filter(it=>FAM[it.id]===f).reduce((a,it)=>a+(st.built[it.id]||0),0)+((st.upBought||{})[f]||0)}
+// target: a unit key in st.u, or 'solar' / 'wind'
+const upList=t=>t==='solar'||t==='wind'?UPG[t]:(st.u[t]?UPG[FAM[st.u[t].type]]||[]:[]);
+const upState=(t,id)=>t==='solar'||t==='wind'?st.gup[t][id]:((st.u[t]||{}).up||{})[id];
+const upPrice=(t,x)=>Math.round(x.cost*(st.u[t]?upScale(st.u[t]).cost:1)/1e4)*1e4;
+const upName=t=>t==='solar'?'Solar farm':t==='wind'?'Wind farm':(st.u[t].name||TYPES[st.u[t].type].name);
+function fxText(t,x){const sc=st.u[t]?upScale(st.u[t]).mw:1,o=[],f=x.fx,pc=v=>Math.round(Math.abs(v)*100)+'%';
+  if(f.max)o.push('+'+Math.round(f.max*sc)+' MW max');if(f.min)o.push('min −'+Math.round(-f.min*sc)+' MW');
+  if(f.ramp)o.push('ramp +'+pc(f.ramp));if(f.cost)o.push('fuel cost −'+pc(f.cost));if(f.start)o.push('start time −'+pc(f.start));
+  if(f.startCost)o.push('start cost −'+pc(f.startCost));if(f.water)o.push('water use −'+pc(f.water));
+  if(f.gain)o.push('+'+pc(f.gain)+' output');if(f.track)o.push('flatter, longer solar day');if(f.deice)o.push('immune to ice storms');return o.join(' · ')}
+function buyUp(t,id){
+  const x=upList(t).find(y=>y.id===id),price=upPrice(t,x);
+  if(!x||upState(t,id)||st.money<price)return;
+  st.money-=price;
+  if(t==='solar'||t==='wind')st.gup[t][id]='q';else{const u=st.u[t];u.up=u.up||{};u.up[id]='q'}
+  const f=t==='solar'||t==='wind'?t:FAM[st.u[t].type];st.upBought[f]=(st.upBought[f]||0)+1;
+  save();
+}
+function upCount(t){const L=upList(t);return [L.filter(x=>upState(t,x.id)===1).length,L.length]}
+function openUpgrades(t,back){
+  const wasRun=st.phase==='run';
+  if(wasRun){st.paused=true;st.phase='pause'}
+  const close=()=>{if(back)back();else{hideOv();if(wasRun){st.paused=false;st.phase='run'}}};
+  const draw=()=>{
+    if(t!=='solar'&&t!=='wind'&&!st.u[t]){close();return}
+    const L=upList(t);
+    showOv(`<h2>${upName(t)} upgrades</h2><p>Bank: <b class="num">${money(st.money)}</b>. Upgrades are installed during overnight maintenance and work from the next morning. Each one also counts toward the +100 MW bonus for every 5 upgrades of this kind.</p>
+    ${L.map(x=>{const stt=upState(t,x.id),pr=upPrice(t,x),ok=!stt&&st.money>=pr;
+      return `<div class="pn shop"><div><b>${x.name}</b>${stt===1?' <span class="chip">installed</span>':stt==='q'?' <span class="chip st">tonight</span>':''}
+      <div class="note">${x.desc}</div><div class="note"><b>${fxText(t,x)}</b></div><details class="how"><summary>How it works</summary><p>${x.learn}</p></details></div>
+      ${stt?'':`<button class="btn sm ${ok?'pri':''}" data-up="${x.id}" ${ok?'':'disabled'}>${money(pr)}</button>`}</div>`}).join('')}
+    <button class="btn" id="upx">${back?'Back':'Close'}</button>`);
+    document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{buyUp(t,b.dataset.up);draw()});
+    $('upx').onclick=close;
+  };
+  draw();
+}
 function bonusLine(id){
   const f=FAM[id],n=famBought(f),earned=Math.floor((st.cnt[f]||0)/5);
   if(f==='bat'){const lv=st.bats[st.bats.length-1].lvl+st.pending.filter(x=>x==='bat').length;return `<div class="note">${lv>=5?'Newest battery is maxed: next one is a new battery at level 1':`Newest battery level ${lv}/5`}${st.bats.length>1?` · ${st.bats.length} batteries`:''}</div>`}
@@ -438,12 +683,23 @@ function openShop(back){
   if(wasRun){st.paused=true;st.phase='pause'}
   const close=()=>{if(back)back();else{hideOv();if(wasRun){st.paused=false;st.phase='run'}}};
   const draw=()=>{
-    showOv(`<h2>Build plants</h2><p>Bank: <b class="num">${money(st.money)}</b>. New plants come online at the start of the next day. Every 5 upgrades of one kind adds +100 MW max to all matching equipment.</p>
+    showOv(`<h2>Build plants</h2><p>Bank: <b class="num">${money(st.money)}</b>. New plants come online at the start of the next day. To improve an existing plant (pumps, economizers, trackers…), tap <b>Upgrades</b> on its card. Every 5 builds or upgrades of one kind adds +100 MW max to all matching equipment.</p>
     ${SHOP.map(it=>`<div class="pn shop"><div><b>${it.name}</b>${st.built[it.id]?` <span class="chip">own ${st.built[it.id]}</span>`:''}
       <div class="note">${it.spec}</div>${bonusLine(it.id)}</div><button class="btn sm ${st.money>=it.price?'pri':''}" data-buy="${it.id}" ${st.money>=it.price?'':'disabled'}>${money(it.price)}</button></div>`).join('')}
+    <h3 class="sh">Workforce &amp; reliability</h3><p class="note">Takes effect immediately.</p>
+    ${WF.map(it=>{const own=wf(it.id),lock=it.req&&!wf(it.req),ok=!own&&!lock&&st.money>=it.price;
+      return `<div class="pn shop"><div><b>${it.name}</b>${own?' <span class="chip">owned</span>':''}<div class="note">${it.spec}${lock?` · requires ${WF.find(x=>x.id===it.req).name}`:''}</div>
+      <details class="how"><summary>How it works</summary><p>${it.learn}</p></details></div>
+      ${own?'':`<button class="btn sm ${ok?'pri':''}" data-wf="${it.id}" ${ok?'':'disabled'}>${money(it.price)}</button>`}</div>`}).join('')}
+    ${st.exp?`<h3 class="sh">Interconnection</h3><div class="pn shop"><div><b>Tie-line upgrade</b> <span class="chip">${st.exp.cap} MW now</span>
+      <div class="note">+300 MW of transfer capacity to the regional grid. Takes effect immediately.</div>
+      <details class="how"><summary>How it works</summary><p>Tie-line capacity is set by the conductors’ thermal rating and by the transformers and breakers at each end. Upgrades restring the line with higher-capacity conductor or add a parallel circuit, and uprate the substation equipment to match.</p></details></div>
+      <button class="btn sm ${st.money>=2e6?'pri':''}" data-tie="1" ${st.money>=2e6?'':'disabled'}>$2.00M</button></div>`:''}
     ${pendingList().length?`<p class="note">Under construction: ${pendingList().join(', ')}</p>`:''}
     <button class="btn" id="shopx">${back?'Back':'Close'}</button>`);
     document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{buy(b.dataset.buy);draw()});
+    document.querySelectorAll('[data-wf]').forEach(b=>b.onclick=()=>{const it=WF.find(x=>x.id===b.dataset.wf);if(st.money>=it.price&&!wf(it.id)){st.money-=it.price;st.wf[it.id]=1;save()}draw()});
+    document.querySelectorAll('[data-tie]').forEach(b=>b.onclick=()=>{if(st.money>=2e6){st.money-=2e6;st.exp.cap+=300;buildUnits();save()}draw()});
     $('shopx').onclick=close;
   };
   draw();
@@ -452,21 +708,31 @@ function begin(){hideOv();st.paused=false;st.phase='run';buildUnits();alarm('','
 
 // ---------- UI ----------
 function buildUnits(){
+  const upBtn=t=>{const [a,n]=upCount(t);return `<button class="btn sm" data-upg="${t}">Upgrades ${a}/${n}</button>`};
+  const spec=u=>{const c=TYPES[u.type];return `Ramp ${Math.round(uramp(u))} MW/s · min ${umin(u)} MW · fuel $${Math.round(ucost(u))}/MWh${c.start?` · start ${Math.round(ustart(u))} s`:''}`};
   const card=(k)=>{const u=st.u[k],c=TYPES[u.type];
     const startBtn=`<button class="btn sm" data-start="${k}"></button>`;
     const agc=`<label class="tog"><input type="checkbox" data-agc="${k}" ${u.agc?'checked':''}> AGC</label>`;
-    const res=k==='hydro'?`<div class="bar"><i id="resb"></i></div><div class="note">Reservoir <span class="num" id="rest"></span></div>`:`<div class="note">${c.note}</div>`;
-    return `<div class="pn u"><div class="h"><span class="nm">${u.name||c.name}</span><span class="chip" id="ch-${k}"></span></div>
+    const res=k==='hydro'?`<div class="bar"><i id="resb"></i></div><div class="note">Reservoir <span class="num" id="rest"></span></div>`:'';
+    return `<div class="pn u" data-t="${TAB[u.type]}"><div class="h"><span class="nm">${u.name||c.name}</span><span class="chip" id="ch-${k}"></span></div>
       <div class="mw num" id="mw-${k}"></div><div class="sp num" id="sp-${k}"></div>
-      <input type="range" min="${c.min}" max="${umax(u)}" step="10" value="${u.sp}" data-sp="${k}" aria-label="${u.name||c.name} setpoint">
-      ${res}<div class="row">${startBtn}${agc}</div></div>`};
-  $('units').innerHTML=Object.keys(st.u).map(card).join('')+
-  `<div class="pn u"><div class="h"><span class="nm">Solar farm</span><span class="chip" id="ch-sol"></span></div>
-   <div class="mw num" id="mw-sol"></div><div class="note">Follows the sun. Clouds cut it fast. ${st.solarCap} MW peak. Up <span class="num" id="srt"></span>, down <span class="num" id="sst"></span>.</div>
-   <label class="tog"><input type="checkbox" id="curts"> Curtail</label></div>
-   ${st.windCap?`<div class="pn u"><div class="h"><span class="nm">Wind farm</span><span class="chip" id="ch-wind"></span></div>
+      <input type="range" min="${umin(u)}" max="${umax(u)}" step="10" value="${u.sp}" data-sp="${k}" aria-label="${u.name||c.name} setpoint">
+      ${res}<div class="note">${spec(u)}</div><div class="row">${startBtn}${agc}${upBtn(k)}</div></div>`};
+  const order=Object.keys(st.u).sort((a,b)=>['base','swing','green'].indexOf(TAB[st.u[a].type])-['base','swing','green'].indexOf(TAB[st.u[b].type]));
+  $('units').innerHTML=order.map(card).join('')+
+  `<div class="pn u" data-t="green"><div class="h"><span class="nm">Solar farm</span><span class="chip" id="ch-sol"></span></div>
+   <div class="mw num" id="mw-sol"></div><div class="note">${st.solarCap} MW of panels. Clouds cut it fast. Up <span class="num" id="srt"></span>, down <span class="num" id="sst"></span>.</div>
+   <div class="row"><label class="tog"><input type="checkbox" id="curts"> Curtail</label>${upBtn('solar')}</div></div>
+   ${st.windCap?`<div class="pn u" data-t="green"><div class="h"><span class="nm">Wind farm</span><span class="chip" id="ch-wind"></span></div>
    <div class="mw num" id="mw-wind"></div><div class="bar"><i id="windb"></i></div><div class="note">Wind available <span class="num" id="wavail"></span>. Free, often stronger at night. Ramps at up to 25 MW/s.</div>
-   <label class="tog"><input type="checkbox" id="curtw"> Curtail</label></div>`:''}
+   <div class="row"><label class="tog"><input type="checkbox" id="curtw"> Curtail</label>${upBtn('wind')}</div></div>`:''}
+   <div class="pinned">Storage${st.exp?', tie line':''} and load shed · shown on every tab</div>
+   ${st.exp?`<div class="pn u" style="grid-column:1/-1"><div class="h"><span class="nm">Tie line &amp; market</span><span class="chip" id="ch-tie"></span></div>
+   <div class="tiegrid"><div><span>Price now</span><b class="num" id="tie-p"></b></div><div><span>Flow</span><b class="num" id="tie-f"></b></div><div><span>Contract</span><b class="num" id="tie-c"></b></div></div>
+   <div class="note" id="tie-n"></div>
+   <input type="range" min="${-st.exp.cap}" max="${st.exp.cap}" step="10" value="${st.exp.man||0}" id="tiesp" aria-label="Manual trade">
+   <div class="row"><label class="tog"><input type="checkbox" id="tieauto" ${st.exp.auto?'checked':''}> Auto-trade</label>
+   <label class="tog"><input type="checkbox" id="tiecut" ${st.exp.cut?'checked':''}> Cut contract (−$${SHORT_PEN}/MWh)</label></div></div>`:''}
    ${st.bats.map((b,i)=>`<div class="pn u"><div class="h"><span class="nm">${batName(i)} <span class="note">Lv ${b.lvl}${b.lvl>=5?' (max)':''}</span></span><span class="chip" id="ch-bat${i}"></span></div>
    <div class="mw num" id="mw-bat${i}"></div><div class="sp num" id="sp-bat${i}"></div>
    <input type="range" min="${-b.mw}" max="${b.mw}" step="10" value="${b.sp}" data-bsp="${i}" aria-label="${batName(i)} setpoint">
@@ -476,12 +742,14 @@ function buildUnits(){
    <div class="note">Under-frequency relays drop 150 MW blocks below 59.3 Hz. Each unserved MWh costs $1,000. Restore when you have the generation.</div>
    <div class="row"><button class="btn sm" id="restore">Restore 150 MW</button></div></div>`;
   document.querySelectorAll('[data-sp]').forEach(el=>el.oninput=()=>{st.u[el.dataset.sp].sp=+el.value});
+  document.querySelectorAll('[data-upg]').forEach(el=>el.onclick=()=>openUpgrades(el.dataset.upg,null));
+  setTab(st.tab||'base');
   document.querySelectorAll('[data-start]').forEach(el=>el.onclick=()=>{
     const k=el.dataset.start,u=st.u[k],c=TYPES[u.type],nm=u.name||c.name;
     if(u.s==='dmg'){if(st.money<u.rc){alarm('w','Not enough money to repair '+nm);return}
-      st.money-=u.rc;u.s='rep';u.tmr=u.type==='nuc'||u.type==='smr'?40:20;alarm('','Repair crew dispatched to '+nm);return}
+      st.money-=u.rc;u.s='rep';u.tmr=repTime(u);alarm('','Repair crew dispatched to '+nm);return}
     if(!c.start)return;
-    if(u.s==='off'){u.s='start';u.tmr=c.start;u.p=0;st.money-=c.startCost;alarm('','Starting '+nm+' (−$'+c.startCost/1000+'k)')}
+    if(u.s==='off'){const sc=ustartCost(u);u.s='start';u.tmr=ustart(u);u.p=0;st.money-=sc;alarm('','Starting '+nm+' (−$'+Math.round(sc/100)/10+'k)')}
     else if(u.s==='on'||u.s==='start'){u.s='off';alarm('','Stopping '+nm)}
   });
   $('curts').checked=!!st.curtS;$('curts').onchange=e=>st.curtS=e.target.checked;
@@ -489,18 +757,23 @@ function buildUnits(){
   document.querySelectorAll('[data-agc]').forEach(el=>el.onchange=()=>{const u=st.u[el.dataset.agc];if(u)u.agc=el.checked});
   document.querySelectorAll('[data-bauto]').forEach(el=>el.onchange=()=>st.bats[+el.dataset.bauto].auto=el.checked);
   document.querySelectorAll('[data-bsp]').forEach(el=>el.oninput=()=>st.bats[+el.dataset.bsp].sp=+el.value);
+  if(st.exp){$('tiesp').oninput=e=>st.exp.man=+e.target.value;$('tieauto').onchange=e=>st.exp.auto=e.target.checked;$('tiecut').onchange=e=>st.exp.cut=e.target.checked}
   $('restore').onclick=()=>{if(st.shed>0){st.shed=Math.max(0,st.shed-150);alarm('','Restored 150 MW of customers')}};
 }
+const netBal=()=>(st.gen||0)-(st.served||0)-(st.ex||0);
+function setTab(t){st.tab=t;$('units').dataset.tab=t;document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.tab===t;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)})}
 function render(){
+  {const w={base:0,swing:0,green:(st.solar||0)+(st.windP||0)};for(const k in st.u){const u=st.u[k];w[TAB[u.type]]+=u.p}
+   for(const t in w)$('tw-'+t).textContent=Math.round(w[t])+' MW'}
   $('dayl').textContent='Day '+st.day;$('clock').textContent=fmt(st.t);
   $('srt').textContent=fmt(st.sr||6);$('sst').textContent=fmt(st.ss||19);
   $('sunl').textContent='Sun '+fmt(st.sr||6)+'–'+fmt(st.ss||19);
   {const dv=Math.abs(st.f-60),bf=$('bf');bf.textContent=st.f.toFixed(2);bf.className='num'+(dv>.7?' a':dv>.2?' w':'');
-   const bl=Math.round((st.gen||0)-(st.served||0));$('bb').textContent=(bl>0?'+':bl<0?'−':'')+Math.abs(bl)}$('money').textContent=money(st.money);
+   const bl=Math.round(netBal());$('bb').textContent=(bl>0?'+':bl<0?'−':'')+Math.abs(bl)}$('money').textContent=money(st.money);
   const f=st.f,dev=Math.abs(f-60);
   $('fz').textContent=f.toFixed(2)+' Hz';$('fz').className='fz num'+(dev>.7?' a':dev>.2?' w':'');
   $('kd').textContent=Math.round(st.load||0)+' MW';$('kg').textContent=Math.round(st.gen||0)+' MW';
-  const bal=Math.round((st.gen||0)-(st.served||0));$('kb').textContent=(bal>0?'+':'')+bal+' MW';
+  const bal=Math.round(netBal());$('kb').textContent=(bal>0?'+':'')+bal+' MW';
   $('ks').textContent=st.shed+' MW';$('shedt').textContent=st.shed+' MW';$('restore').disabled=!st.shed;
   for(const k in st.u){const u=st.u[k],c=TYPES[u.type];
     $('mw-'+k).innerHTML=Math.round(u.p)+'<small> / '+umax(u)+' MW</small>';
@@ -509,7 +782,7 @@ function render(){
     ch.className='chip'+(u.s==='start'||u.s==='rep'?' st':u.s==='trip'||u.s==='dmg'?' trip':'');
     const sb=document.querySelector(`[data-start="${k}"]`);
     if(sb){const show=c.start||u.s==='dmg'||u.s==='rep';sb.style.display=show?'':'none';
-      sb.textContent=u.s==='dmg'?'Repair ('+money(u.rc)+')':u.s==='rep'?'Repairing':u.s==='off'?'Start (−$'+c.startCost/1000+'k)':u.s==='trip'?'Locked out':u.s==='build'?'Building':'Stop';
+      sb.textContent=u.s==='dmg'?'Repair ('+money(u.rc)+')':u.s==='rep'?'Repairing':u.s==='off'?'Start (−$'+Math.round(ustartCost(u)/100)/10+'k)':u.s==='trip'?'Locked out':u.s==='build'?'Building':'Stop';
       sb.disabled=u.s==='trip'||u.s==='build'||u.s==='rep'||(u.s==='dmg'&&st.money<u.rc);sb.classList.toggle('pri',u.s==='dmg')}
     const sl=document.querySelector(`[data-sp="${k}"]`);if(u.agc)sl.value=u.sp;sl.disabled=!!u.agc||u.s==='build';
   }
@@ -527,6 +800,13 @@ function render(){
     $('socb'+i).style.width=(b.soc/b.cap*100)+'%';$('soct'+i).textContent=Math.round(b.soc)+' / '+b.cap+' MWh';
     $('ch-bat'+i).textContent=b.p>5?'DISCHG':b.p<-5?'CHARGE':'IDLE'});
   {const pc=tC?tS/tC:0,el=$('bsoc');el.textContent=tC?Math.round(pc*100)+'%':'—';el.className='num'+((pc>.85&&tP<-5)||(pc<.15&&tP>5)?' w':'')}
+  if(st.exp&&$('tie-p')){const E=st.exp,c=contractAt(st.t),nx=priceAt((st.t+1)%24);
+    $('tie-p').textContent='$'+(st.price||priceAt(st.t));$('tie-f').textContent=(E.flow>=0?'+':'−')+Math.abs(Math.round(E.flow))+' MW';
+    $('tie-c').textContent=c?c+' MW':'—';
+    $('ch-tie').textContent=E.flow>5?'EXPORT':E.flow<-5?'IMPORT':'IDLE';
+    $('tie-n').textContent=(c?`Contract delivering until 21:00${E.cut?' (CUT: paying penalties)':''}. `:`Next contract: ${contractMW(st.day)} MW, ramping in from 15:30. `)+`Next hour $${nx}/MWh · tie ${E.cap} MW · today: contract ${money(st.dayStats.contract||0)}, sold ${money(st.dayStats.sold||0)}, bought ${money(st.dayStats.bought||0)}${(st.dayStats.pen||0)>1?', penalties '+money(st.dayStats.pen):''}`;
+    if(E.auto)$('tiesp').value=Math.round(E.tr||0);$('tiesp').disabled=!!E.auto}
+  $('lgex').textContent=st.exp?' + exports':'';
   drawGauge();drawTrend();drawAlarm();outlook();
   $('pause').textContent=st.paused?'Run':'Pause';$('spd').textContent=(st.speed===.5?'½':st.speed)+'×';$('spd').classList.toggle('slow',!!st.autoSlow);
 }
@@ -552,7 +832,7 @@ function drawTrend(){
   const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,W,H);
   const h=st.hist;if(h.length<2)return;
   const css=getComputedStyle(document.documentElement);
-  const fc=[];for(let j=0;j<=60;j++){const tt=st.t+j*.05;fc.push([demand(tt%24),demand(tt%24)-solarAt(tt%24)-(st.windP||0)])}
+  const fc=[];for(let j=0;j<=60;j++){const tt=st.t+j*.05;const cx=contractAt(tt%24)+(st.exp?st.exp.tr||0:0);fc.push([demand(tt%24)+cx,demand(tt%24)+cx-solarAt(tt%24)-(st.windP||0)])}
   let lo=Infinity,hi=-Infinity;for(const [a,b] of h){lo=Math.min(lo,a,b);hi=Math.max(hi,a,b)}
   for(const [a,b] of fc){lo=Math.min(lo,a,b);hi=Math.max(hi,a,b)}
   lo-=40;hi+=40;const off=140-h.length,X=i=>(i+off)/200*W,Y=v=>H-6-(v-lo)/(hi-lo)*(H-12),XF=j=>(140+j)/200*W;
@@ -568,7 +848,7 @@ function drawTrend(){
   x.setLineDash([]);
 }
 function outlook(){
-  const t=st.t,dD=demand((t+1)%24)-demand(t),dS=solarAt((t+1)%24)-solarAt(t),need=dD-dS;
+  const t=st.t,dD=demand((t+1)%24)+contractAt((t+1)%24)-demand(t)-contractAt(t),dS=solarAt((t+1)%24)-solarAt(t),need=dD-dS;
   const sg=v=>{const n=Math.round(v/5)*5;return (n>0?'+':n<0?'−':'')+Math.abs(n)+' MW'};
   $('o-d').textContent=sg(dD);$('o-s').textContent=sg(dS);$('o-n').textContent=sg(need);
   const dis=st.bats.reduce((a,b)=>a+Math.max(0,b.p),0),soc=st.bats.reduce((a,b)=>a+b.soc,0);
@@ -579,7 +859,7 @@ function outlook(){
 function showOv(html){$('ovc').innerHTML=html;$('ov').classList.add('on')}
 function hideOv(){$('ov').classList.remove('on')}
 function store(k,v){try{if(v===undefined)return JSON.parse(localStorage.getItem(k));if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}}
-function save(){if(!st.over)store('go-state',st)}
+function save(){if(!st.over){st.savedAt=Date.now();store('go-state',st)}}
 function intro(resume){
   showOv(`<h2>${resume?'Shift paused':'Grid Operator'}</h2>
   <p>You run a small power grid. Match generation to customer demand and keep frequency at <b>60 Hz</b>.</p>
@@ -588,35 +868,43 @@ function intro(resume){
   <li>Move the setpoint sliders, or tick <b>AGC</b> on a unit to let it follow demand automatically. The dashed lines and the “Next hour” line show what’s coming, including solar fading at sunset.</li>
   <li>Watch for clouds, unit trips and heat waves. Each day demand grows. From day 5, natural disasters can damage or destroy plants.</li>
   <li>Speed button cycles ½×, 1×, 2×, 3×. If the power balance passes ±100 MW the game drops to ½× on its own, and returns to 1× once you’re back within ±30 MW for a few seconds.</li>
+  <li>Plants are grouped in tabs: <b>Base load</b> (nuclear, coal), <b>Swing</b> (gas turbines, combined cycle) and <b>Green</b> (hydro, solar, wind). Batteries show on every tab.</li>
   <li>Earn $60 per MWh delivered, minus fuel. Spend it on new plants with <b>Build</b>. They come online the next morning.</li>
+  <li><b>Real time:</b> when you close the app, the grid keeps running at 1 game hour per real hour (up to 3 days) on autopilot. It repairs damage and can’t black out, but it’s costlier than you. You get a report when you come back.</li>
+  <li><b>Day 30, The Expansion:</b> a tie line to the regional market, hourly prices, and a firm evening delivery contract that grows every day.</li>
   <li>Survive as many days as you can.</li></ul>
-  <p class="note">Best run: ${st.best} day${st.best===1?'':'s'}. Pauses itself if you switch apps. Version 3.1 (layout fixes).</p>
+  <p class="note">Best run: ${st.best} day${st.best===1?'':'s'}. Pauses itself if you switch apps. Version 5 (workforce, The Expansion).</p>
   <label class="tog"><input type="checkbox" id="aslow" ${st.autoSlowOn!==false?'checked':''}> Auto slow-motion: drop to ½× speed when the power balance passes ±100 MW</label>
   <button class="btn pri" id="go">${resume?'Resume':'Start shift'}</button>`);
   $('aslow').onchange=e=>st.autoSlowOn=e.target.checked;
   $('go').onclick=()=>{if(resume){hideOv();st.paused=false;st.phase='run'}else begin()};
 }
 $('pause').onclick=()=>{if(st.phase!=='run'&&st.phase!=='pause')return;st.paused=!st.paused;st.phase=st.paused?'pause':'run';if(st.paused)save()};
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+new ResizeObserver(()=>document.documentElement.style.setProperty('--barh',document.querySelector('.topbar').offsetHeight+'px')).observe(document.querySelector('.topbar'));
 $('build').onclick=()=>{if(st.phase==='run'||st.phase==='pause')openShop(null)};
 $('spd').onclick=()=>{const L=[.5,1,2,3];st.speed=L[(L.indexOf(st.speed)+1)%L.length];st.autoSlow=false;okT=0};
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&st.phase==='run'){st.paused=true;st.phase='pause';save();intro(true)}});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){if(st.phase==='run'){st.paused=true;st.phase='pause';intro(true)}if(st.phase!=='intro')save()}
+  else if(st.savedAt)catchUp(Date.now()-st.savedAt);
+});
 new ResizeObserver(()=>drawTrend()).observe($('trend'));
 
 function loop(now){
   let dt=Math.min(.25,(now-last)/1000);last=now;
   if(!st.paused&&!st.over){acc+=dt*st.speed;while(acc>=.05&&!st.paused&&!st.over){step(.05);acc-=.05}
-    saveT+=dt;if(saveT>5){saveT=0;save()}
     // auto slow-motion: drop to ½× when the power balance passes ±100 MW, back to 1× after 3 s within ±30 MW
-    const bal=(st.gen||0)-(st.served||0),imb=Math.abs(bal);
+    const bal=netBal(),imb=Math.abs(bal);
     if(st.autoSlowOn!==false&&!st.autoSlow&&st.speed>.5&&imb>=100){st.autoSlow=true;st.speed=.5;okT=0;alarm('w','Slowing to ½× speed: balance '+(bal>0?'+':'')+Math.round(bal)+' MW')}
     if(st.autoSlow){okT=imb<30?okT+dt:0;if(okT>3){st.autoSlow=false;st.speed=1;alarm('','Conditions normal. Back to 1× speed')}}}else acc=0;
+  if(st.phase!=='intro'&&!st.over){saveT+=dt;if(saveT>5){saveT=0;save()}}
   render();requestAnimationFrame(loop);
 }
 const best=store('go-best')||0,saved=store('go-state');
 if(saved&&saved.u&&!saved.over){st=Object.assign(fresh(best),saved);for(const k in st.u)st.u[k].type=st.u[k].type||k;if(!saved.bats&&saved.bat){const lv=1+Math.max(0,(saved.built&&saved.built.bat||0)-(saved.pending||[]).filter(x=>x==='bat').length);st.bats=[Object.assign(newBat(),saved.bat,{mw:saved.batMW||200,cap:saved.batCap||300,lvl:lv})];delete st.bat}
   if(!saved.cnt){for(const id in st.built){const f=FAM[id];st.cnt[f]=(st.cnt[f]||0)+st.built[id]}for(const id of st.pending)st.cnt[FAM[id]]--;for(const k in st.u)if(st.u[k].s==='build')st.cnt[FAM[st.u[k].type]]--}
   if(saved.windOut===undefined)st.windOut=st.curtW?0:st.windCap*st.wind;st.best=Math.max(best,st.best||0);st.paused=true;buildUnits();
-  if(saved.phase==='day'){st.phase='run';intro(true)}else intro(true)}
+  if(!catchUp(Date.now()-(saved.savedAt||Date.now()))){if(saved.phase==='day'){st.phase='run';intro(true)}else intro(true)}}
 else{st=fresh(best);st.load=demand(st.t);st.served=st.load;st.gen=st.load;buildUnits();intro(false)}
 requestAnimationFrame(loop);
 }
