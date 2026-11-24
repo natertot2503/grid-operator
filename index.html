@@ -65,7 +65,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 .olk .need b{color:var(--blue)}
 .obat{font-size:13px;height:18px;font-variant-numeric:tabular-nums}
 .leg i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}
-.alarm{display:flex;gap:8px;align-items:center;font-size:14px;min-height:44px}
+.alarm{display:flex;gap:8px;align-items:center;font-size:13.5px;line-height:1.25;height:50px;padding:5px 10px}
+#amsg{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-width:0}
 .alarm .tag{flex:none;font-size:12px;font-weight:800;padding:2px 7px;border-radius:4px;background:var(--ln);color:var(--ink)}
 .alarm.a .tag{background:var(--alm);color:#fff}.alarm.w .tag{background:var(--warn);color:#1d1600}
 .alarm.a{animation:fl 1s steps(2) 3}
@@ -111,6 +112,28 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 .sh{margin:10px 0 0;font-size:18px}
 .exph{padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--blue) 14%,transparent);border:1px solid var(--blue)}
 .exph h3{margin:0 0 4px;font-size:22px}.exph p,.exph li{font-size:14px}
+.fush{padding:10px 12px;border-radius:10px;background:linear-gradient(135deg,#0d1d44,#123a55);color:#e8fbff;border:1px solid #46e0ff}
+.fush p{margin:4px 0 0;font-size:14px;color:#cdeff7}.fush .note{color:#a9d8e4}.fush .chip{color:#e8fbff}
+.fchk{margin:6px 0;padding-left:4px;list-style:none;font-size:14px}.fchk li{margin:3px 0}
+.card.wide{max-width:560px;padding:0;overflow:auto;background:#050a1c;color:#e8fbff;border-color:#1f5a7a}
+.win-screen{display:grid;gap:10px;padding:0 0 18px}
+.win-screen>*:not(svg){margin-inline:18px}
+.city{width:100%;display:block;border-radius:14px 14px 0 0}
+.wt{font-size:clamp(30px,8vw,44px);line-height:1.03;margin:4px 0 0;text-wrap:balance;color:#fff}
+.ws{margin:0;color:#bfe9f3}
+.wgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.wgrid div{background:#0f1f42;border:1px solid #1f3f6a;border-radius:8px;padding:7px 4px;display:grid;text-align:center;line-height:1.15}
+.wgrid b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wgrid span{font-size:11px;color:#8fc4d4}
+.card.wide .note{color:#8fc4d4}.card.wide .how summary{color:#7ff3ff}.card.wide .btn:not(.pri){background:#0f1f42;color:#e8fbff;border-color:#1f5a7a}
+@media(max-width:420px){.wgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.city .win{animation:tw 5s ease-in-out infinite}
+@keyframes tw{0%,100%{opacity:1}50%{opacity:.45}}
+.city .blink{animation:bl 1.6s steps(2) infinite}@keyframes bl{50%{opacity:.1}}
+.city .plasma{animation:pl 2.4s ease-in-out infinite}@keyframes pl{50%{stroke-width:6;opacity:.85}}
+.city .spin{animation:sp 3s linear infinite}@keyframes sp{to{stroke-dashoffset:-88}}
+.city .pulse{animation:pu 4s ease-in-out infinite;transform-origin:200px 168px}@keyframes pu{50%{opacity:.7;transform:scale(1.05)}}
+.city .car{offset-path:path("M-20 0 L420 0");transform:translateY(var(--y));animation:cr linear infinite}@keyframes cr{from{offset-distance:0%}to{offset-distance:100%}}
+@media(prefers-reduced-motion:reduce){.city *{animation:none!important}}
 .card .fc{font-weight:700;color:var(--blue)}
 .warnp{margin:0;padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--warn) 28%,transparent);border-left:4px solid var(--warn);font-size:14px}
 @media(prefers-reduced-motion:reduce){.alarm.a{animation:none}}
@@ -127,6 +150,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
   </div>
   <div class="ctl"><span class="ttl">Grid Operator</span><span class="note num" id="sunl"></span>
     <button class="btn sm" id="build">Build</button><button class="btn sm" id="spd">1×</button><button class="btn sm" id="pause">Pause</button></div>
+  <div class="pn alarm" id="alarm"><span class="tag">INFO</span><span id="amsg">System normal</span></div>
 </div></header>
 <div class="app">
 
@@ -150,7 +174,6 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
       <div class="obat" id="o-b">Battery idle</div></div>
   </div>
 
-  <div class="pn alarm" id="alarm"><span class="tag">INFO</span><span id="amsg">System normal</span></div>
 
   <div class="tabs" role="tablist" id="tabs">
     <button class="tab" data-tab="base" role="tab"><b>Base load</b><span class="num" id="tw-base">0 MW</span></button>
@@ -174,12 +197,13 @@ const TYPES={
   hydro:{name:'Hydro',min:0,max:250,ramp:80,cost:0,note:'Free and fast, limited water.'},
   gasb:{name:'Gas peaker',min:30,max:200,ramp:30,cost:85,start:6,startCost:800,note:'Fast but pricey. Start ~6 s.'},
   coalb:{name:'Coal',min:100,max:300,ramp:18,cost:30,start:25,startCost:4000,note:'Start takes ~25 s. Min 100.'},
+  fus:{name:'Fusion reactor',min:0,max:9000,ramp:90,cost:1,note:'Tokamak fusion plant.'},
   cc:{name:'Combined cycle',min:150,max:450,ramp:12,cost:45,start:45,startCost:8000,note:'Gas turbine + HRSG + steam turbine.'},
   smr:{name:'Small reactor',min:100,max:300,ramp:8,cost:12,start:40,startCost:3000,note:'Cheap baseload, slow ramp. Start ~40 s. Min 100.'}
 };
 const RES=1300;
-const FAM={cc:'cc',gas:'gas',gasb:'gas',coal:'coal',coalb:'coal',nuc:'nuc',smr:'nuc',hydro:'hydro',res:'hydro',solar:'solar',wind:'wind',bat:'bat'};
-const FAMN={cc:'combined-cycle units',gas:'gas units',coal:'coal units',nuc:'nuclear units',hydro:'hydro',solar:'solar',wind:'wind',bat:'battery'};
+const FAM={fus:'fus',cc:'cc',gas:'gas',gasb:'gas',coal:'coal',coalb:'coal',nuc:'nuc',smr:'nuc',hydro:'hydro',res:'hydro',solar:'solar',wind:'wind',bat:'bat'};
+const FAMN={fus:'fusion',cc:'combined-cycle units',gas:'gas units',coal:'coal units',nuc:'nuclear units',hydro:'hydro',solar:'solar',wind:'wind',bat:'battery'};
 // per-plant engineering upgrades; installed overnight. fx: max/min MW, ramp/cost/start/startCost/water as fractions
 const UPG={
   nuc:[{id:'fwp',learn:'A reactor’s heat output is limited partly by how much feedwater can be pushed through the steam generators. Bigger feedwater pumps raise that flow, so the plant can run at a higher licensed power level (a “power uprate”) and send more steam to the turbine.',name:'Upsized feedwater pumps',desc:'Thermal power uprate: more steam to the turbine',fx:{max:60},cost:1.6e6},
@@ -221,7 +245,7 @@ const uramp=u=>TYPES[u.type].ramp*(1+ufx(u,'ramp'));
 const ucost=u=>TYPES[u.type].cost*(1+ufx(u,'cost'));
 const ustart=u=>(TYPES[u.type].start||0)*(1+ufx(u,'start'));
 const ustartCost=u=>(TYPES[u.type].startCost||0)*(1+ufx(u,'startCost'));
-const TAB={cc:'swing',nuc:'base',smr:'base',coal:'base',coalb:'base',gas:'swing',gasb:'swing',hydro:'green'};
+const TAB={fus:'base',cc:'swing',nuc:'base',smr:'base',coal:'base',coalb:'base',gas:'swing',gasb:'swing',hydro:'green'};
 // build shop: price in $, what it adds; everything comes online at the start of the next day
 const SHOP=[
   {id:'gasb',name:'Gas peaker',spec:'200 MW · start 6 s · fast ramp, $85/MWh fuel',price:1.2e6},
@@ -262,6 +286,23 @@ const contractMW=d=>200+15*(d-st.exp.start);
 // schedule ramps in 15:30–16:00 and out 21:00–21:30, like a real interchange schedule
 const cShape=t=>t<15.5||t>=21.5?0:t<16?(t-15.5)/.5:t<21?1:(21.5-t)/.5;
 const contractAt=t=>st.exp?Math.round(contractMW(st.day)*cShape(t%24)):0;
+// ================= FUSION: the win condition =================
+const FUS_PRICE=40e6;
+const mainNuc=()=>st.u.nuc||null;
+function handover(dt){
+  const F=st.u.fus,h=st.fus;h.cd=(h.cd||0)-dt;F.agc=false;
+  if(st.f<60.08)F.sp=Math.min(9000,F.p+45);else F.sp=F.p;          // climb while the grid can absorb it
+  for(const k in st.u){const u=st.u[k];if(u!==F&&(u.type==='nuc'||u.type==='smr')&&u.s==='on'){u.agc=false;u.sp=umin(u)}} // reactors to minimum
+  if(h.cd<=0&&st.f>60.05){                                           // release the priciest startable unit
+    const on=Object.keys(st.u).filter(k=>st.u[k].s==='on'&&TYPES[st.u[k].type].start&&st.u[k].type!=='smr').sort((a,b)=>ucost(st.u[b])-ucost(st.u[a]));
+    if(on.length){const u=st.u[on[0]];u.s='off';h.cd=2.5;if(!st.away)alarm('','Fusion handover: '+(u.name||TYPES[u.type].name)+' released')}}
+}
+function fusionChecks(){
+  const nucs=Object.values(st.u).filter(u=>(u.type==='nuc'||u.type==='smr')&&u.s!=='build').length;
+  const m=mainNuc(),full=m&&UPG.nuc.every(x=>m.up&&m.up[x.id]===1);
+  return {day:st.day>=50,nucs:nucs>=10,full:!!full,n:nucs}}
+const fusionReady=()=>{const c=fusionChecks();return c.day&&c.nucs&&c.full};
+const fusionHint=()=>{const c=fusionChecks();return [c.day,c.nucs,c.full].filter(Boolean).length>=2};
 let resumeOv=null;
 
 let okT=0,st,last=performance.now(),acc=0,saveT=0,histT=0;
@@ -271,7 +312,7 @@ const batName=i=>st.bats.length>1?'Battery '+(i+1):'Battery';
 function fresh(best){
   return{t:5,day:1,money:0,f:60,res:RES,shed:0,noise:0,cloud:1,cloudT:1,ev:planDay(1),heat:false,
     u:{nuc:{type:'nuc',s:'on',p:600,sp:600},coal:{type:'coal',s:'on',p:400,sp:400},gas:{type:'gas',s:'off',p:0,sp:150,tmr:0},hydro:{type:'hydro',s:'on',p:50,sp:50,agc:false}},
-    bats:[newBat()],solarCap:380,windCap:0,wind:.5,windT:.5,pending:[],built:{},cnt:{},ub:{},wf:{},exp:null,ex:0,gup:{solar:{},wind:{}},upBought:{},tab:'base',resCap:RES,sr:6,ss:19,windOut:0,hist:[],alarm:{lvl:'',msg:'System normal'},lowT:0,hiT:0,ufCd:0,
+    bats:[newBat()],solarCap:380,windCap:0,wind:.5,windT:.5,pending:[],built:{},cnt:{},ub:{},wf:{},exp:null,ex:0,tot:{dis:0,built:0,ups:0,peak:0,sheds:0,mwh:0,earned:0},fus:null,won:false,gup:{solar:{},wind:{}},upBought:{},tab:'base',resCap:RES,sr:6,ss:19,windOut:0,hist:[],alarm:{lvl:'',msg:'System normal'},lowT:0,hiT:0,ufCd:0,
     dayStats:{profit:0,uns:0,fmin:60,fmax:60,sheds:0},speed:1,paused:true,over:false,phase:'intro',best:best||0};
 }
 function planDay(d){
@@ -300,7 +341,7 @@ const DIS=[
 ];
 const disName=k=>DIS.find(d=>d.k===k).name;
 const pick=a=>a[Math.floor(Math.random()*a.length)];
-const liveUnits=f=>Object.keys(st.u).filter(k=>st.u[k].s!=='build'&&(!f||f(st.u[k],k)));
+const liveUnits=f=>Object.keys(st.u).filter(k=>st.u[k].s!=='build'&&st.u[k].type!=='fus'&&(!f||f(st.u[k],k)));
 function log(msg){(st.dayLog=st.dayLog||[]).push(fmt(st.t)+' '+msg);if(st.away)st.awayRep.log.push('Day '+st.day+' '+fmt(st.t)+' '+msg)}
 function damage(k,quiet){
   const u=st.u[k];if(!u)return;
@@ -334,6 +375,7 @@ function anyTarget(){
 }
 function hitTarget(sevChance){const t=anyTarget();if(typeof t==='string'&&st.u[t]&&Math.random()>=sevChance)damage(t);else downgrade(t)}
 function disaster(e){
+  st.tot.dis++;
   const k=e.k,R=Math.random;
   if(k==='storm'){const u=liveUnits(u=>u.s==='on'||u.s==='off');alarm('a','Lightning strike!');log('Severe thunderstorm');if(u.length)damage(pick(u))}
   if(k==='ice'){log('Ice storm took down lines');const u=liveUnits(u=>u.s!=='dmg');if(u.length&&R()<.6)damage(pick(u));else alarm('w','Ice storm: lines holding')}
@@ -377,7 +419,7 @@ function step(dt){
     }
     if(e.type==='trip'){
       if(!e.unit&&t>=e.h-1){const c=Object.keys(st.u).filter(k=>st.u[k].s==='on'&&THERMAL.includes(st.u[k].type));e.unit=c.length?pick(c):'none';
-        if(wf('pdm')&&st.u[e.unit])alarm('a','PREDICTIVE MAINT.: '+(st.u[e.unit].name||TYPES[st.u[e.unit].type].name)+' vibration rising. Ease it below 70% or take it offline within the hour to avoid a trip')}
+        if(wf('pdm')&&st.u[e.unit])alarm('a',(st.u[e.unit].name||TYPES[st.u[e.unit].type].name)+' vibration high: ease below 70% or stop it within 1 h')}
       if(!e.a&&t>=e.h){e.a=1;const u=st.u[e.unit];
         const eased=u&&wf('pdm')&&u.s==='on'&&u.p<=.7*umax(u);
         if(eased)log((u.name||TYPES[u.type].name)+': trip avoided (eased off after warning)');
@@ -432,6 +474,7 @@ function step(dt){
     if(pc<.15&&b.p>5&&!b.ew){b.ew=1;alarm('w',nm+' near empty: it will soon stop covering shortfall')}if(pc>.25)b.ew=0;
   });
   st.windP=wind;
+  if(st.u.fus&&!st.won)handover(dt);
   // interconnection: scheduled exports (+) / imports (−)
   let ex=0;
   if(st.exp){const E=st.exp,price=priceAt(t),cNow=contractAt(t),cut=st.away?!!E.apCut:!!E.cut,cDel=cut?0:Math.min(cNow,E.cap);
@@ -449,18 +492,21 @@ function step(dt){
     st.money+=rev-pen;const tv=(ex-toC)*dh*price;if(tv>=0)st.dayStats.sold=(st.dayStats.sold||0)+tv;else st.dayStats.bought=(st.dayStats.bought||0)-tv;st.dayStats.trade=(st.dayStats.trade||0)+tv;st.dayStats.contract=(st.dayStats.contract||0)+toC*dh*CONTRACT_RATE;st.dayStats.pen=(st.dayStats.pen||0)+pen;
     st.price=price}
   st.ex=ex;
+  if(st.u.fus&&!st.won&&!st.winPending){st.fus.t=(st.fus.t||0)+dh;const fp=st.u.fus.p,lo=served+Math.max(0,ex);
+    if(st.fus.t>1&&fp>=.5*lo&&Math.abs(st.f-60)<.15){st.winPending=true;st.winDay=st.day;st.winT=st.t;if(!st.away){st.paused=true;st.phase='pause';setTimeout(victory,400)}}}
   // frequency
   st.f+=((gen-served-ex)-D*(st.f-60))/M*dt;
   st.gen=gen;st.load=load;st.served=served;st.solar=solar;
   // protection
   st.ufCd-=dt;
-  if(st.f<59.3&&st.ufCd<=0&&st.shed<load*.35){st.shed+=150;st.ufCd=2;st.money-=20000;st.dayStats.sheds++;if(st.away)st.awayRep.sheds++;alarm('a','UFLS: 150 MW of customers dropped')}
+  if(st.f<59.3&&st.ufCd<=0&&st.shed<load*.35){st.shed+=150;st.ufCd=2;st.money-=20000;st.dayStats.sheds++;st.tot.sheds++;if(st.away)st.awayRep.sheds++;alarm('a','UFLS: 150 MW of customers dropped')}
   st.lowT=st.f<59?st.lowT+dt:0;st.hiT=st.f>61?st.hiT+dt:0;
   if(!st.away&&(st.lowT>1||st.hiT>1)){blackout(st.f<60?'Frequency collapsed below 59 Hz':'Overspeed: frequency ran above 61 Hz');return}
   if(st.f<59.6&&st.alarm.lvl!=='a')st.alarm={lvl:'w',msg:fmt(t)+'  Low frequency'};
   if(st.f>60.4&&st.alarm.lvl!=='a')st.alarm={lvl:'w',msg:fmt(t)+'  High frequency'};
   // money
   const unserved=st.shed*dh,profit=served*dh*60-cost-unserved*1000;
+  st.tot.mwh+=served*dh;if(served>st.tot.peak)st.tot.peak=served;if(profit>0)st.tot.earned+=profit;
   st.money+=profit;st.dayStats.profit+=profit;st.dayStats.uns+=unserved;
   st.dayStats.fmin=Math.min(st.dayStats.fmin,st.f);st.dayStats.fmax=Math.max(st.dayStats.fmax,st.f);
   histT+=dt;if(histT>=.5){histT=0;st.hist.push([served+ex,gen-solar-wind]);if(st.hist.length>140)st.hist.shift()}
@@ -528,11 +574,66 @@ function showAway(){
   <li>Repairs: <b>${R.repairs}</b>${R.repairs?` (${money(R.repCost)})`:''} · Unit starts: ${st.ap.starts} · Shutdowns: ${st.ap.stops}</li></ul>
   ${lg.length?`<p class="fc">Incident log${R.log.length>14?' (latest 14)':''}</p><ul>${lg.map(x=>`<li>${x}</li>`).join('')}</ul>`:'<p class="note">Quiet stretch: no incidents.</p>'}
   ${st.awayRep.expNew?EXP_HTML():''}
+  ${st.winPending&&!st.won?'<div class="fush"><b>Something happened while you were gone.</b><p>Tap below.</p></div>':''}
   ${learnHTML(st.learn)}
   <p class="note">The autopilot plays it safe and can’t black out the grid, but it runs costlier than you would. Your own settings (AGC, curtail, setpoints) are as you left them${st.curtS||st.curtW?'. Solar or wind is still curtailed on your controls':''}.</p>
   <button class="btn pri" id="go">Take the controls</button>`);
   st.learn=[];
-  $('go').onclick=()=>{hideOv();st.paused=false;st.phase='run';alarm('','Back on manual control')};
+  $('go').onclick=()=>{if(st.winPending&&!st.won){victory();return}hideOv();st.paused=false;st.phase='run';alarm('','Back on manual control')};
+}
+function skyline(){
+  const R=(a,b)=>a+Math.random()*(b-a);let back='',mid='',front='',stars='',cars='';
+  for(let i=0;i<70;i++)stars+=`<circle cx="${R(0,400).toFixed(1)}" cy="${R(0,120).toFixed(1)}" r="${R(.3,1.1).toFixed(2)}" fill="#fff" opacity="${R(.3,.9).toFixed(2)}"/>`;
+  const bld=(x,w,h,y0,col,win)=>{let s=`<rect x="${x}" y="${(y0-h).toFixed(1)}" width="${w}" height="${(+h).toFixed(1)}" fill="${col}"/>`;
+    if(win)for(let yy=y0-h+6;yy<y0-4;yy+=7)for(let xx=+x+3;xx<+x+(+w)-3;xx+=5)if(Math.random()<.55)s+=`<rect class="win" x="${xx.toFixed(1)}" y="${yy.toFixed(1)}" width="2.4" height="3" fill="${Math.random()<.75?'#ffc970':'#7ff3ff'}" style="animation-delay:${R(0,6).toFixed(2)}s"/>`;
+    if(h>90&&Math.random()<.6){const cx=(+x+w/2).toFixed(1);s+=`<line x1="${cx}" y1="${(y0-h).toFixed(1)}" x2="${cx}" y2="${(y0-h-14).toFixed(1)}" stroke="${col}" stroke-width="1.5"/><circle class="blink" cx="${cx}" cy="${(y0-h-14).toFixed(1)}" r="1.6" fill="#ff5a4a"/>`}return s};
+  for(let x=-5;x<405;){const w=R(14,30);back+=bld(x.toFixed(1),+w.toFixed(1),R(40,110),232,'#1a2a4f',false);x+=w+R(0,4)}
+  for(let x=-8;x<405;){const w=R(16,34),h=R(45,150);mid+=bld(x.toFixed(1),+w.toFixed(1),h,248,'#13203d',true);x+=w+R(2,8)}
+  for(let x=-10;x<405;){const w=R(22,44),h=R(30,95);front+=bld(x.toFixed(1),+w.toFixed(1),h,268,'#0b1428',true);x+=w+R(4,14)}
+  for(let i=0;i<5;i++)cars+=`<circle class="car" r="1.4" fill="${i%2?'#7ff3ff':'#ffe2a8'}" style="animation-duration:${R(6,12).toFixed(1)}s;animation-delay:-${R(0,10).toFixed(1)}s;--y:${R(60,150).toFixed(0)}px"/>`;
+  return `<svg viewBox="0 0 400 300" class="city" role="img" aria-label="A futuristic city skyline at night, lit by a glowing fusion reactor ring">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050a1c"/><stop offset=".62" stop-color="#0d1d44"/><stop offset="1" stop-color="#1f5a7a"/></linearGradient>
+  <radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#8ff6ff" stop-opacity=".55"/><stop offset="1" stop-color="#8ff6ff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="ring" x1="0" x2="1"><stop offset="0" stop-color="#46e0ff"/><stop offset=".5" stop-color="#fff3c4"/><stop offset="1" stop-color="#46e0ff"/></linearGradient></defs>
+  <rect width="400" height="300" fill="url(#sky)"/>${stars}
+  <ellipse cx="200" cy="168" rx="150" ry="70" fill="url(#halo)" class="pulse"/>
+  ${back}
+  <g transform="translate(200 176)"><ellipse rx="66" ry="20" fill="none" stroke="#20324f" stroke-width="13"/>
+   <ellipse rx="66" ry="20" fill="none" stroke="url(#ring)" stroke-width="4" class="plasma"/>
+   <ellipse rx="66" ry="20" fill="none" stroke="#fff" stroke-width="1.2" stroke-dasharray="14 30" class="spin" opacity=".9"/>
+   <rect x="-12" y="-4" width="24" height="56" fill="#16264a"/><rect x="-30" y="22" width="60" height="30" rx="3" fill="#1a2c55"/></g>
+  ${mid}
+  <path d="M0 222 Q200 206 400 222" stroke="#7ff3ff" stroke-width="1" fill="none" opacity=".5"/>
+  <circle r="2" fill="#ffffff"><animateMotion dur="7s" repeatCount="indefinite" path="M-10 222 Q200 206 410 222"/></circle>
+  ${front}${cars}<rect y="268" width="400" height="32" fill="#070d1c"/>
+  <rect y="268" width="400" height="1" fill="#7ff3ff" opacity=".35"/></svg>`;
+}
+function victory(){
+  st.won=true;st.winPending=false;st.paused=true;st.phase='pause';
+  const T=st.tot,d=st.winDay||st.day;
+  const w=store('go-wins')||[];w.push({day:d,at:Date.now()});store('go-wins',w);
+  const fast=w.reduce((a,x)=>Math.min(a,x.day),1e9);
+  save();
+  showOv(`<div class="win-screen">${skyline()}
+   <h2 class="wt">The city runs on fusion</h2>
+   <p class="ws">Project Infinite, day ${d}, ${fmt(st.winT||st.t)}. First plasma held, the grid handed over, and the lights won’t flicker again.</p>
+   <div class="wgrid">
+     <div><b class="num">${d}</b><span>days</span></div>
+     <div><b class="num">${money(T.earned)}</b><span>earned</span></div>
+     <div><b class="num">${Math.round(T.mwh/1000).toLocaleString()} GWh</b><span>delivered</span></div>
+     <div><b class="num">${Math.round(T.peak).toLocaleString()} MW</b><span>peak served</span></div>
+     <div><b class="num">${T.built}</b><span>built</span></div>
+     <div><b class="num">${T.ups}</b><span>upgrades</span></div>
+     <div><b class="num">${T.dis}</b><span>disasters</span></div>
+     <div><b class="num">${T.sheds}</b><span>blocks shed</span></div>
+   </div>
+   <p class="note">${fast<d?'Fastest win: day '+fast+'.':'Your fastest win so far.'} Stats count from Version 6 on, so a run started earlier shows partial numbers.</p>
+   <details class="how"><summary>How a fusion plant like this would work</summary><p>A tokamak holds hydrogen plasma hotter than the Sun’s core inside a ring of superconducting magnets, so it never touches the walls. Deuterium and tritium fuse into helium and release fast neutrons; a blanket around the ring catches them and turns their energy into heat, which makes steam for an ordinary turbine. The fuel comes from seawater and lithium, and there’s no runaway chain reaction or long-lived high-level waste. In the real world it’s still experimental, but it’s exactly what everyone is chasing.</p></details>
+   <div class="row"><button class="btn pri" id="keep">Keep playing</button><button class="btn" id="anew">Start a new grid</button></div></div>`);
+  $('ovc').classList.add('wide');
+  if(st.u.fus)st.u.fus.agc=true;
+  $('keep').onclick=()=>{$('ovc').classList.remove('wide');hideOv();st.paused=false;st.phase='run';alarm('','Fusion online. Endless mode')};
+  $('anew').onclick=()=>{$('ovc').classList.remove('wide');const b=st.best;store('go-state',null);st=fresh(b);buildUnits();intro(false)};
 }
 function blackout(why){
   st.over=true;st.paused=true;st.phase='over';
@@ -548,13 +649,20 @@ function endDay(){
   const s=st.dayStats;
   if(st.day>st.best){st.best=st.day;store('go-best',st.best)}
   st.day++;st.ev=planDay(st.day);planSun();st.heat=st.ev.some(e=>e.type==='heat');
+  let fusMsg='';
+  if(st.fus&&st.fus.stage<2){st.fus.stage++;
+    if(st.fus.stage===1)fusMsg='Superconducting magnet coils installed and cooled to −269 °C. Vacuum vessel sealed. One more night.';
+    else{fusMsg='FIRST PLASMA this morning.';st.u.fus={type:'fus',name:'Fusion reactor',s:'on',p:0,sp:9000,agc:true};
+      for(const k in st.u){const u=st.u[k];if(u.s==='on')u.agc=true}st.fus.t=0;buildUnits()}}
   let expNew=false;if(!st.exp&&st.day>=EXP_DAY){st.exp={start:st.day,cap:400,flow:0,tr:0,man:0,auto:true,cut:false};expNew=true;st.ev.push({type:'spike',h:12+Math.random()*6});buildUnits()}
   const done=commission();
+  if(!st.hinted&&!st.fus&&fusionHint()){st.hinted=true;fusMsg='Engineers keep asking about the fenced-off lot behind Unit 1. Someone left blueprints in the break room marked only “???”. (Check the Build shop.)'}
   const has=k=>st.ev.some(e=>e.type==='dis'&&e.k===k);
   st.ice=has('ice');st.smoke=has('fire');
   st.res=st.resCap*(has('drought')?.4:has('flood')?1.4:1);
-  st.lastDay={n:st.day-1,profit:s.profit,fmin:s.fmin,fmax:s.fmax,sheds:s.sheds,done,log:st.dayLog||[],learn:st.learn||[],trade:s.trade||0,sold:s.sold||0,bought:s.bought||0,contract:s.contract||0,pen:s.pen||0,expNew};
+  st.lastDay={n:st.day-1,profit:s.profit,fmin:s.fmin,fmax:s.fmax,sheds:s.sheds,done,log:st.dayLog||[],learn:st.learn||[],fusMsg,trade:s.trade||0,sold:s.sold||0,bought:s.bought||0,contract:s.contract||0,pen:s.pen||0,expNew};
   if(st.away&&expNew)st.awayRep.expNew=true;
+  if(st.away&&fusMsg)st.awayRep.log.push('Day '+st.day+' 00:00 Project Infinite: '+fusMsg);
   if(!st.away)st.learn=[];
   st.dayLog=[];
   st.dayStats={profit:0,uns:0,fmin:60,fmax:60,sheds:0};
@@ -575,6 +683,7 @@ function showDay(){
     'Demand is up '+Math.round(5*(st.day-1))+'% over day 1.'];
   const pend=pendingList();
   showOv(`<h2>Day ${s.n} complete</h2>
+  ${s.fusMsg?`<div class="fush"><b>${st.fus?'Project Infinite':'Rumors'}</b><p>${s.fusMsg}</p></div>`:''}
   ${s.expNew?EXP_HTML():''}
   <ul><li>Profit: <b>${money(s.profit)}</b> · Bank: <b>${money(st.money)}</b></li>
   ${st.exp&&!s.expNew?`<li>Contract income: <b>${money(s.contract)}</b>${s.pen>1?` · Shortfall penalties: <b>−${money(s.pen)}</b>`:''}</li><li>Market: sold <b>${money(s.sold)}</b> · bought <b>${money(s.bought)}</b> (imports that replaced costlier generation)</li>`:''}<li>Frequency range: <b>${s.fmin.toFixed(2)}–${s.fmax.toFixed(2)} Hz</b></li>
@@ -603,7 +712,7 @@ function pendingList(){
 }
 function buy(id){
   const it=shopItem(id);if(st.money<it.price)return;
-  st.money-=it.price;st.built[id]=(st.built[id]||0)+1;
+  st.money-=it.price;st.built[id]=(st.built[id]||0)+1;st.tot.built++;
   if(TYPES[id]){const c=TYPES[id],n=st.built[id];
     const num=id==='smr'||id==='cc'?n:n+1;st.u[id+n]={type:id,name:c.name+(num>1?' '+num:''),s:'build',p:0,sp:c.min,tmr:0};buildUnits()}
   else st.pending.push(id);
@@ -636,7 +745,8 @@ function count(id,done){
 }
 function famBought(f){return SHOP.filter(it=>FAM[it.id]===f).reduce((a,it)=>a+(st.built[it.id]||0),0)+((st.upBought||{})[f]||0)}
 // target: a unit key in st.u, or 'solar' / 'wind'
-const upList=t=>t==='solar'||t==='wind'?UPG[t]:(st.u[t]?UPG[FAM[st.u[t].type]]||[]:[]);
+const upList0=t=>t==='solar'||t==='wind'?UPG[t]:(st.u[t]?UPG[FAM[st.u[t].type]]||[]:[]);
+const upList=t=>t!=='solar'&&t!=='wind'&&st.u[t]&&st.u[t].type==='fus'?[]:upList0(t);
 const upState=(t,id)=>t==='solar'||t==='wind'?st.gup[t][id]:((st.u[t]||{}).up||{})[id];
 const upPrice=(t,x)=>Math.round(x.cost*(st.u[t]?upScale(st.u[t]).cost:1)/1e4)*1e4;
 const upName=t=>t==='solar'?'Solar farm':t==='wind'?'Wind farm':(st.u[t].name||TYPES[st.u[t].type].name);
@@ -648,7 +758,7 @@ function fxText(t,x){const sc=st.u[t]?upScale(st.u[t]).mw:1,o=[],f=x.fx,pc=v=>Ma
 function buyUp(t,id){
   const x=upList(t).find(y=>y.id===id),price=upPrice(t,x);
   if(!x||upState(t,id)||st.money<price)return;
-  st.money-=price;
+  st.money-=price;st.tot.ups++;
   if(t==='solar'||t==='wind')st.gup[t][id]='q';else{const u=st.u[t];u.up=u.up||{};u.up[id]='q'}
   const f=t==='solar'||t==='wind'?t:FAM[st.u[t].type];st.upBought[f]=(st.upBought[f]||0)+1;
   save();
@@ -678,6 +788,17 @@ function bonusLine(id){
   const soon=Math.floor(n/5)>earned;
   return `<div class="note">${soon?`5/5: +100 MW on all ${FAMN[f]} arrives tomorrow`:`Upgrades ${n%5}/5 toward +100 MW on all ${FAMN[f]}`}${earned?` · bonus earned ×${earned}`:''}</div>`;
 }
+function fusionPanel(){
+  if(st.won&&st.u.fus)return '';
+  if(st.fus)return `<div class="fush"><b>Project Infinite</b> <span class="chip st">${st.fus.stage===0?'site work tonight':st.fus.stage===1?'first plasma tomorrow':'online'}</span><p class="note">Construction continues overnight.</p></div>`;
+  const c=fusionChecks();
+  if(!st.hinted&&!fusionHint())return '';
+  const ok=fusionReady(),can=ok&&st.money>=FUS_PRICE,ck=b=>b?'✓':'·';
+  return `<div class="fush"><b>${ok?'Project Infinite: clearance granted':'???'}</b>
+    <p class="note">${ok?'Classified. Two nights to build. Everything you’ve learned leads here.':'Blueprints marked “eyes only”. The board wants proof you’re ready:'}</p>
+    <ul class="fchk"><li>${ck(c.day)} Fifty days keeping the lights on</li><li>${ck(c.nucs)} A fleet of ten reactors (${c.n}/10)</li><li>${ck(c.full)} The original plant, upgraded to the limit</li></ul>
+    ${ok?`<button class="btn ${can?'pri':''}" id="fusbuy" ${can?'':'disabled'}>Begin construction · ${money(FUS_PRICE)}</button>`:''}</div>`;
+}
 function openShop(back){
   const wasRun=st.phase==='run';
   if(wasRun){st.paused=true;st.phase='pause'}
@@ -686,6 +807,7 @@ function openShop(back){
     showOv(`<h2>Build plants</h2><p>Bank: <b class="num">${money(st.money)}</b>. New plants come online at the start of the next day. To improve an existing plant (pumps, economizers, trackers…), tap <b>Upgrades</b> on its card. Every 5 builds or upgrades of one kind adds +100 MW max to all matching equipment.</p>
     ${SHOP.map(it=>`<div class="pn shop"><div><b>${it.name}</b>${st.built[it.id]?` <span class="chip">own ${st.built[it.id]}</span>`:''}
       <div class="note">${it.spec}</div>${bonusLine(it.id)}</div><button class="btn sm ${st.money>=it.price?'pri':''}" data-buy="${it.id}" ${st.money>=it.price?'':'disabled'}>${money(it.price)}</button></div>`).join('')}
+    ${fusionPanel()}
     <h3 class="sh">Workforce &amp; reliability</h3><p class="note">Takes effect immediately.</p>
     ${WF.map(it=>{const own=wf(it.id),lock=it.req&&!wf(it.req),ok=!own&&!lock&&st.money>=it.price;
       return `<div class="pn shop"><div><b>${it.name}</b>${own?' <span class="chip">owned</span>':''}<div class="note">${it.spec}${lock?` · requires ${WF.find(x=>x.id===it.req).name}`:''}</div>
@@ -698,6 +820,7 @@ function openShop(back){
     ${pendingList().length?`<p class="note">Under construction: ${pendingList().join(', ')}</p>`:''}
     <button class="btn" id="shopx">${back?'Back':'Close'}</button>`);
     document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{buy(b.dataset.buy);draw()});
+    if($('fusbuy'))$('fusbuy').onclick=()=>{if(fusionReady()&&!st.fus&&st.money>=FUS_PRICE){st.money-=FUS_PRICE;st.fus={stage:0};st.tot.built++;save()}draw()};
     document.querySelectorAll('[data-wf]').forEach(b=>b.onclick=()=>{const it=WF.find(x=>x.id===b.dataset.wf);if(st.money>=it.price&&!wf(it.id)){st.money-=it.price;st.wf[it.id]=1;save()}draw()});
     document.querySelectorAll('[data-tie]').forEach(b=>b.onclick=()=>{if(st.money>=2e6){st.money-=2e6;st.exp.cap+=300;buildUnits();save()}draw()});
     $('shopx').onclick=close;
@@ -708,7 +831,7 @@ function begin(){hideOv();st.paused=false;st.phase='run';buildUnits();alarm('','
 
 // ---------- UI ----------
 function buildUnits(){
-  const upBtn=t=>{const [a,n]=upCount(t);return `<button class="btn sm" data-upg="${t}">Upgrades ${a}/${n}</button>`};
+  const upBtn=t=>{const [a,n]=upCount(t);if(!n)return '';return `<button class="btn sm" data-upg="${t}">Upgrades ${a}/${n}</button>`};
   const spec=u=>{const c=TYPES[u.type];return `Ramp ${Math.round(uramp(u))} MW/s · min ${umin(u)} MW · fuel $${Math.round(ucost(u))}/MWh${c.start?` · start ${Math.round(ustart(u))} s`:''}`};
   const card=(k)=>{const u=st.u[k],c=TYPES[u.type];
     const startBtn=`<button class="btn sm" data-start="${k}"></button>`;
@@ -872,8 +995,8 @@ function intro(resume){
   <li>Earn $60 per MWh delivered, minus fuel. Spend it on new plants with <b>Build</b>. They come online the next morning.</li>
   <li><b>Real time:</b> when you close the app, the grid keeps running at 1 game hour per real hour (up to 3 days) on autopilot. It repairs damage and can’t black out, but it’s costlier than you. You get a report when you come back.</li>
   <li><b>Day 30, The Expansion:</b> a tie line to the regional market, hourly prices, and a firm evening delivery contract that grows every day.</li>
-  <li>Survive as many days as you can.</li></ul>
-  <p class="note">Best run: ${st.best} day${st.best===1?'':'s'}. Pauses itself if you switch apps. Version 5 (workforce, The Expansion).</p>
+  <li>Survive as many days as you can. Rumor has it there’s a way to win…</li></ul>
+  <p class="note">Best run: ${st.best} day${st.best===1?'':'s'}. Pauses itself if you switch apps. v0.8: Project Infinite.</p>
   <label class="tog"><input type="checkbox" id="aslow" ${st.autoSlowOn!==false?'checked':''}> Auto slow-motion: drop to ½× speed when the power balance passes ±100 MW</label>
   <button class="btn pri" id="go">${resume?'Resume':'Start shift'}</button>`);
   $('aslow').onchange=e=>st.autoSlowOn=e.target.checked;
