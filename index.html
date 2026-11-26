@@ -134,6 +134,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 -apple-system
 .city .pulse{animation:pu 4s ease-in-out infinite;transform-origin:200px 168px}@keyframes pu{50%{opacity:.7;transform:scale(1.05)}}
 .city .car{offset-path:path("M-20 0 L420 0");transform:translateY(var(--y));animation:cr linear infinite}@keyframes cr{from{offset-distance:0%}to{offset-distance:100%}}
 @media(prefers-reduced-motion:reduce){.city *{animation:none!important}}
+.chip.stg1{border-color:var(--ok);color:var(--ok)}.chip.stg3{border-color:var(--warn);color:var(--ink)}
 .card .fc{font-weight:700;color:var(--blue)}
 .warnp{margin:0;padding:8px 10px;border-radius:8px;background:color-mix(in srgb,var(--warn) 28%,transparent);border-left:4px solid var(--warn);font-size:14px}
 @media(prefers-reduced-motion:reduce){.alarm.a{animation:none}}
@@ -274,7 +275,7 @@ const WF=[
 ];
 const wf=id=>!!(st.wf&&st.wf[id]);
 const crewT=()=>(wf('crew1')?.6:1)*(wf('crew2')?.6:1),crewC=()=>(wf('crew1')?.75:1)*(wf('crew2')?.75:1);
-const repTime=u=>(u.type==='nuc'||u.type==='smr'?40:20)*crewT();
+const repTime=u=>(u.type==='nuc'||u.type==='smr'?40:20)*crewT()*stageMul(FAM[u.type]);
 const tripOdds=()=>wf('train2')?.2:wf('train1')?.35:.55;
 // ================= THE EXPANSION (day 30+) =================
 const EXP_DAY=30,CONTRACT_RATE=90,SHORT_PEN=400;
@@ -346,7 +347,7 @@ function log(msg){(st.dayLog=st.dayLog||[]).push(fmt(st.t)+' '+msg);if(st.away)s
 function damage(k,quiet){
   const u=st.u[k];if(!u)return;
   const c=TYPES[u.type],nm=u.name||c.name;
-  u.s='dmg';u.p=0;u.rc=Math.round(umax(u)*1000*(u.type==='nuc'||u.type==='smr'?1.5:1)*crewC());
+  u.s='dmg';u.p=0;u.rc=Math.round(umax(u)*1000*(u.type==='nuc'||u.type==='smr'?1.5:1)*crewC()*stageMul(FAM[u.type]));
   if(quiet)return;alarm('a',nm+' DAMAGED: offline until repaired ($'+Math.round(u.rc/1000)+'k)');log(nm+' damaged');
 }
 // knock a target down one level; can remove it from the grid entirely
@@ -711,8 +712,8 @@ function pendingList(){
   return [...st.pending.map(id=>shopItem(id).name),...Object.values(st.u).filter(u=>u.s==='build').map(u=>u.name),...ups];
 }
 function buy(id){
-  const it=shopItem(id);if(st.money<it.price)return;
-  st.money-=it.price;st.built[id]=(st.built[id]||0)+1;st.tot.built++;
+  const it=shopItem(id),pr=itemPrice(it);if(st.money<pr)return;
+  st.money-=pr;st.built[id]=(st.built[id]||0)+1;st.tot.built++;
   if(TYPES[id]){const c=TYPES[id],n=st.built[id];
     const num=id==='smr'||id==='cc'?n:n+1;st.u[id+n]={type:id,name:c.name+(num>1?' '+num:''),s:'build',p:0,sp:c.min,tmr:0};buildUnits()}
   else st.pending.push(id);
@@ -748,7 +749,8 @@ function famBought(f){return SHOP.filter(it=>FAM[it.id]===f).reduce((a,it)=>a+(s
 const upList0=t=>t==='solar'||t==='wind'?UPG[t]:(st.u[t]?UPG[FAM[st.u[t].type]]||[]:[]);
 const upList=t=>t!=='solar'&&t!=='wind'&&st.u[t]&&st.u[t].type==='fus'?[]:upList0(t);
 const upState=(t,id)=>t==='solar'||t==='wind'?st.gup[t][id]:((st.u[t]||{}).up||{})[id];
-const upPrice=(t,x)=>Math.round(x.cost*(st.u[t]?upScale(st.u[t]).cost:1)/1e4)*1e4;
+const upFam=t=>t==='solar'||t==='wind'?t:FAM[st.u[t].type];
+const upPrice=(t,x)=>Math.round(x.cost*(st.u[t]?upScale(st.u[t]).cost:1)*stageMul(upFam(t))/1e4)*1e4;
 const upName=t=>t==='solar'?'Solar farm':t==='wind'?'Wind farm':(st.u[t].name||TYPES[st.u[t].type].name);
 function fxText(t,x){const sc=st.u[t]?upScale(st.u[t]).mw:1,o=[],f=x.fx,pc=v=>Math.round(Math.abs(v)*100)+'%';
   if(f.max)o.push('+'+Math.round(f.max*sc)+' MW max');if(f.min)o.push('min −'+Math.round(-f.min*sc)+' MW');
@@ -771,7 +773,7 @@ function openUpgrades(t,back){
   const draw=()=>{
     if(t!=='solar'&&t!=='wind'&&!st.u[t]){close();return}
     const L=upList(t);
-    showOv(`<h2>${upName(t)} upgrades</h2><p>Bank: <b class="num">${money(st.money)}</b>. Upgrades are installed during overnight maintenance and work from the next morning. Each one also counts toward the +100 MW bonus for every 5 upgrades of this kind.</p>
+    showOv(`<h2>${upName(t)} upgrades</h2><p>Bank: <b class="num">${money(st.money)}</b>. ${stageTag(upFam(t))} Upgrades are installed during overnight maintenance and work from the next morning. Each one also counts toward the +100 MW bonus for every 5 upgrades of this kind.</p>
     ${L.map(x=>{const stt=upState(t,x.id),pr=upPrice(t,x),ok=!stt&&st.money>=pr;
       return `<div class="pn shop"><div><b>${x.name}</b>${stt===1?' <span class="chip">installed</span>':stt==='q'?' <span class="chip st">tonight</span>':''}
       <div class="note">${x.desc}</div><div class="note"><b>${fxText(t,x)}</b></div><details class="how"><summary>How it works</summary><p>${x.learn}</p></details></div>
@@ -782,11 +784,16 @@ function openUpgrades(t,back){
   };
   draw();
 }
+function stageOf(f){const n=famBought(f);return n<5?1:n<10?2:3}
+function stageMul(f){return [.5,1,1.5][stageOf(f)-1]}
+const itemPrice=it=>Math.round(it.price*stageMul(FAM[it.id])/1e4)*1e4;
+const stageTag=f=>`<span class="chip stg${stageOf(f)}">Stage ${stageOf(f)} · ${Math.round(stageMul(f)*100)}%</span>`;
 function bonusLine(id){
   const f=FAM[id],n=famBought(f),earned=Math.floor((st.cnt[f]||0)/5);
-  if(f==='bat'){const lv=st.bats[st.bats.length-1].lvl+st.pending.filter(x=>x==='bat').length;return `<div class="note">${lv>=5?'Newest battery is maxed: next one is a new battery at level 1':`Newest battery level ${lv}/5`}${st.bats.length>1?` · ${st.bats.length} batteries`:''}</div>`}
+  const sg=stageTag(f)+' ';
+  if(f==='bat'){const lv=st.bats[st.bats.length-1].lvl+st.pending.filter(x=>x==='bat').length;return `<div class="note">${sg}${lv>=5?'Newest battery is maxed: next one is a new battery at level 1':`Newest battery level ${lv}/5`}${st.bats.length>1?` · ${st.bats.length} batteries`:''}</div>`}
   const soon=Math.floor(n/5)>earned;
-  return `<div class="note">${soon?`5/5: +100 MW on all ${FAMN[f]} arrives tomorrow`:`Upgrades ${n%5}/5 toward +100 MW on all ${FAMN[f]}`}${earned?` · bonus earned ×${earned}`:''}</div>`;
+  return `<div class="note">${sg}${soon?`5/5: +100 MW on all ${FAMN[f]} arrives tomorrow`:`Upgrades ${n%5}/5 toward +100 MW on all ${FAMN[f]}`}${earned?` · bonus earned ×${earned}`:''}</div>`;
 }
 function fusionPanel(){
   if(st.won&&st.u.fus)return '';
@@ -804,9 +811,9 @@ function openShop(back){
   if(wasRun){st.paused=true;st.phase='pause'}
   const close=()=>{if(back)back();else{hideOv();if(wasRun){st.paused=false;st.phase='run'}}};
   const draw=()=>{
-    showOv(`<h2>Build plants</h2><p>Bank: <b class="num">${money(st.money)}</b>. New plants come online at the start of the next day. To improve an existing plant (pumps, economizers, trackers…), tap <b>Upgrades</b> on its card. Every 5 builds or upgrades of one kind adds +100 MW max to all matching equipment.</p>
+    showOv(`<h2>Build plants</h2><p>Bank: <b class="num">${money(st.money)}</b>. Prices rise in stages per kind of equipment: your first 5 builds or upgrades of a kind are half price, the next 5 full price, after that 150%. Repairs on that kind cost and take the same share. New plants come online at the start of the next day. To improve an existing plant (pumps, economizers, trackers…), tap <b>Upgrades</b> on its card. Every 5 builds or upgrades of one kind adds +100 MW max to all matching equipment.</p>
     ${SHOP.map(it=>`<div class="pn shop"><div><b>${it.name}</b>${st.built[it.id]?` <span class="chip">own ${st.built[it.id]}</span>`:''}
-      <div class="note">${it.spec}</div>${bonusLine(it.id)}</div><button class="btn sm ${st.money>=it.price?'pri':''}" data-buy="${it.id}" ${st.money>=it.price?'':'disabled'}>${money(it.price)}</button></div>`).join('')}
+      <div class="note">${it.spec}</div>${bonusLine(it.id)}</div><button class="btn sm ${st.money>=itemPrice(it)?'pri':''}" data-buy="${it.id}" ${st.money>=itemPrice(it)?'':'disabled'}>${money(itemPrice(it))}</button></div>`).join('')}
     ${fusionPanel()}
     <h3 class="sh">Workforce &amp; reliability</h3><p class="note">Takes effect immediately.</p>
     ${WF.map(it=>{const own=wf(it.id),lock=it.req&&!wf(it.req),ok=!own&&!lock&&st.money>=it.price;
@@ -996,7 +1003,7 @@ function intro(resume){
   <li><b>Real time:</b> when you close the app, the grid keeps running at 1 game hour per real hour (up to 3 days) on autopilot. It repairs damage and can’t black out, but it’s costlier than you. You get a report when you come back.</li>
   <li><b>Day 30, The Expansion:</b> a tie line to the regional market, hourly prices, and a firm evening delivery contract that grows every day.</li>
   <li>Survive as many days as you can. Rumor has it there’s a way to win…</li></ul>
-  <p class="note">Best run: ${st.best} day${st.best===1?'':'s'}. Pauses itself if you switch apps. v0.8: Project Infinite.</p>
+  <p class="note">Best run: ${st.best} day${st.best===1?'':'s'}. Pauses itself if you switch apps. v0.81: Project Infinite.</p>
   <label class="tog"><input type="checkbox" id="aslow" ${st.autoSlowOn!==false?'checked':''}> Auto slow-motion: drop to ½× speed when the power balance passes ±100 MW</label>
   <button class="btn pri" id="go">${resume?'Resume':'Start shift'}</button>`);
   $('aslow').onchange=e=>st.autoSlowOn=e.target.checked;
